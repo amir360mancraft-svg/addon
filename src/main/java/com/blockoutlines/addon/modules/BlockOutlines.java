@@ -75,6 +75,15 @@ public class BlockOutlines extends Module {
         .build()
     );
 
+    public final Setting<Double> thickness = sgRender.add(new DoubleSetting.Builder()
+        .name("thickness")
+        .description("How thick the outline lines are. 1 is the normal thin line, higher makes it chunkier.")
+        .defaultValue(1.0)
+        .range(1.0, 10.0)
+        .sliderRange(1.0, 10.0)
+        .build()
+    );
+
     public final Setting<SettingColor> iconColor = sgRender.add(new ColorSetting.Builder()
         .name("icon-color")
         .description("Color of the light (white) parts of the icon.")
@@ -313,7 +322,7 @@ public class BlockOutlines extends Module {
 
             SettingColor c = color.get();
             int a = Math.max(0, Math.min(255, (int) Math.round(alpha.get() * 255.0)));
-            event.renderer.boxLines(minX, minY, minZ, maxX, maxY, maxZ, new Color(c.r, c.g, c.b, a), 0);
+            drawOutline(event, minX, minY, minZ, maxX, maxY, maxZ, new Color(c.r, c.g, c.b, a), thickness.get());
         } else {
             hasTarget = false;
         }
@@ -342,6 +351,19 @@ public class BlockOutlines extends Module {
         if (hasTarget && iconAlpha.get() > 0) {
             drawIcon(event, (minX + maxX) / 2.0, maxY + 0.005, (minZ + maxZ) / 2.0, 0.45, spin - Math.PI / 2.0, a255(iconAlpha.get()));
         }
+    }
+
+    /** Thickness 1 is the plain GL line. Above that every edge becomes a thin solid bar so it looks thicker. */
+    private void drawOutline(Render3DEvent event, double x1, double y1, double z1, double x2, double y2, double z2, Color color, double thick) {
+        if (thick <= 1.0) {
+            event.renderer.boxLines(x1, y1, z1, x2, y2, z2, color, 0);
+            return;
+        }
+        double h = (thick - 1.0) * 0.004; // half bar width in blocks
+        double[] xs = {x1, x2}, ys = {y1, y2}, zs = {z1, z2};
+        for (double y : ys) for (double z : zs) event.renderer.boxSides(x1 - h, y - h, z - h, x2 + h, y + h, z + h, color, 0);
+        for (double x : xs) for (double z : zs) event.renderer.boxSides(x - h, y1 - h, z - h, x + h, y2 + h, z + h, color, 0);
+        for (double x : xs) for (double y : ys) event.renderer.boxSides(x - h, y - h, z1 - h, x + h, y + h, z2 + h, color, 0);
     }
 
     private static int a255(double v) {
