@@ -22,12 +22,14 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Box;
 import net.minecraft.util.shape.VoxelShape;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Smooth, coloured outline around the block you look at. When that block breaks, a black and white
  * icon (assets/blockoutlines/icon.svg) pops up on top of it and spins for a moment.
  */
 public class BlockOutlines extends Module {
-    private static final float POP_SECONDS = 0.6f;
     private static final double SPIN_RAD_PER_SEC = 0.5;
     private static final double SNAP_DISTANCE_SQ = 1600.0; // jump instead of gliding when the target is > 40 blocks away
 
@@ -65,6 +67,62 @@ public class BlockOutlines extends Module {
         .build()
     );
 
+    public final Setting<Double> iconAlpha = sgRender.add(new DoubleSetting.Builder()
+        .name("icon-alpha")
+        .description("The opacity of the spinning icon on top of the block (0 hides it).")
+        .defaultValue(1.0)
+        .range(0.0, 1.0)
+        .sliderRange(0.0, 1.0)
+        .build()
+    );
+
+    private final SettingGroup sgBreak = settings.createGroup("Break ESP");
+
+    public final Setting<Boolean> breakEsp = sgBreak.add(new BoolSetting.Builder()
+        .name("break-esp")
+        .description("Shows a box where a block was just broken, then fades it out.")
+        .defaultValue(true)
+        .build()
+    );
+
+    public final Setting<SettingColor> breakColor = sgBreak.add(new ColorSetting.Builder()
+        .name("break-color")
+        .description("The color of the broken-block box.")
+        .defaultValue(new SettingColor(255, 255, 255, 255))
+        .visible(breakEsp::get)
+        .build()
+    );
+
+    public final Setting<Double> breakFillAlpha = sgBreak.add(new DoubleSetting.Builder()
+        .name("break-fill-alpha")
+        .description("The opacity of the filled sides of the broken-block box (0 hides them).")
+        .defaultValue(0.25)
+        .range(0.0, 1.0)
+        .sliderRange(0.0, 1.0)
+        .visible(breakEsp::get)
+        .build()
+    );
+
+    public final Setting<Double> breakLineAlpha = sgBreak.add(new DoubleSetting.Builder()
+        .name("break-line-alpha")
+        .description("The opacity of the outline of the broken-block box (0 hides it).")
+        .defaultValue(1.0)
+        .range(0.0, 1.0)
+        .sliderRange(0.0, 1.0)
+        .visible(breakEsp::get)
+        .build()
+    );
+
+    public final Setting<Double> breakTime = sgBreak.add(new DoubleSetting.Builder()
+        .name("break-time")
+        .description("How many seconds the broken-block box stays before it is gone.")
+        .defaultValue(0.6)
+        .range(0.1, 3.0)
+        .sliderRange(0.1, 3.0)
+        .visible(breakEsp::get)
+        .build()
+    );
+
     private static final String CUSTOM_ICON = "meteor-client/block-outlines.svg";
     private SvgIcon icon = SvgIcon.load("/assets/blockoutlines/icon.svg");
 
@@ -76,14 +134,23 @@ public class BlockOutlines extends Module {
     // recent targets (the crosshair moves to the next block right after a break, so remember the last few)
     private static final int HIST = 12;
     private final int[] hX = new int[HIST], hY = new int[HIST], hZ = new int[HIST];
-    private final double[] hCx = new double[HIST], hTop = new double[HIST], hCz = new double[HIST];
+    private final double[][] hBox = new double[HIST][6];
     private final long[] hTime = new long[HIST];
     private int hHead = 0;
     private boolean hAny = false;
 
-    // break pop
-    private float popTimer;
-    private double popX, popY, popZ, spin;
+    private static final class BreakFx {
+        final int x, y, z;
+        final double[] box;
+        double age;
+
+        BreakFx(int x, int y, int z, double[] box) {
+            this.x = x; this.y = y; this.z = z; this.box = box;
+        }
+    }
+
+    private final List<BreakFx> fx = new ArrayList<>();
+    private double spin;
 
     public BlockOutlines() {
         super(Categories.Render, "block-outlines", "Renders a smooth, custom-colored outline around the block you are looking at.");
@@ -104,17 +171,21 @@ public class BlockOutlines extends Module {
     @Override
     public void onDeactivate() {
         hasTarget = false;
-        popTimer = 0;
+        fx.clear();
     }
 
     @EventHandler
     private void onBlockUpdate(BlockUpdateEvent event) {
-        if (popTimer > 0 || !hAny || !event.newState.isAir()) return;
+        if (!breakEsp.get() || !hAny || !event.newState.isAir()) return;
+        int x = event.pos.getX(), y = event.pos.getY(), z = event.pos.getZ();
+        for (BreakFx f : fx) {
+            if (f.x == x && f.y == y && f.z == z && f.age < 0.3) return; // already showing this one
+        }
         long now = System.currentTimeMillis();
         for (int i = 0; i < HIST; i++) {
             if (hTime[i] == 0 || now - hTime[i] > 3000) continue;
-            if (hX[i] == event.pos.getX() && hY[i] == event.pos.getY() && hZ[i] == event.pos.getZ()) {
-                popTimer = POP_SECONDS;
+            if (hX[i] == x && hY[i] == y && hZ[i] == z) {
+                fx.add(new BreakFx(x, y, z, hBox[i].clone()));
                 return;
             }
         }
@@ -146,7 +217,8 @@ public class BlockOutlines extends Module {
             int last = (hHead + HIST - 1) % HIST;
             if (hTime[last] == 0 || hX[last] != targetX || hY[last] != targetY || hZ[last] != targetZ) {
                 hX[hHead] = targetX; hY[hHead] = targetY; hZ[hHead] = targetZ;
-                hCx[hHead] = (tMinX + tMaxX) / 2.0; hTop[hHead] = tMaxY + 0.005; hCz[hHead] = (tMinZ + tMaxZ) / 2.0;
+                hBox[hHead][0] = tMinX; hBox[hHead][1] = tMinY; hBox[hHead][2] = tMinZ;
+                hBox[hHead][3] = tMaxX; hBox[hHead][4] = tMaxY; hBox[hHead][5] = tMaxZ;
                 hTime[hHead] = System.currentTimeMillis();
                 hHead = (hHead + 1) % HIST;
                 hAny = true;
@@ -179,17 +251,34 @@ public class BlockOutlines extends Module {
             hasTarget = false;
         }
 
-        // like the original star: always shown on top of the targeted block, pulses when it breaks
-        boolean pulsing = popTimer > 0;
-        if (pulsing) popTimer = Math.max(0, popTimer - (float) dt);
-        spin += dt * SPIN_RAD_PER_SEC;
-        if (hasTarget || pulsing) {
-            double p = pulsing ? 1.0 - popTimer / POP_SECONDS : 1.0;
-            double scale = 1.0 + (pulsing ? Math.sin(p * Math.PI) * 0.7 : 0.0);
-            double fade = pulsing ? 1.0 - 0.4 * p : 1.0;
-            int a = (int) Math.max(0, Math.min(255, Math.round(alpha.get() * 255.0 * fade)));
-            drawIcon(event, (minX + maxX) / 2.0, maxY + 0.005, (minZ + maxZ) / 2.0, 0.45 * scale, spin - Math.PI / 2.0, a);
+        // broken-block boxes: fade out, then disappear
+        if (!fx.isEmpty()) {
+            double life = breakTime.get();
+            SettingColor bc = breakColor.get();
+            for (int i = fx.size() - 1; i >= 0; i--) {
+                BreakFx f = fx.get(i);
+                f.age += dt;
+                if (f.age >= life) { fx.remove(i); continue; }
+                double fade = 1.0 - f.age / life;
+                double[] b = f.box;
+                if (breakFillAlpha.get() > 0) {
+                    event.renderer.boxSides(b[0], b[1], b[2], b[3], b[4], b[5], new Color(bc.r, bc.g, bc.b, a255(breakFillAlpha.get() * fade)), 0);
+                }
+                if (breakLineAlpha.get() > 0) {
+                    event.renderer.boxLines(b[0], b[1], b[2], b[3], b[4], b[5], new Color(bc.r, bc.g, bc.b, a255(breakLineAlpha.get() * fade)), 0);
+                }
+            }
         }
+
+        // spinning icon on top of the targeted block
+        spin += dt * SPIN_RAD_PER_SEC;
+        if (hasTarget && iconAlpha.get() > 0) {
+            drawIcon(event, (minX + maxX) / 2.0, maxY + 0.005, (minZ + maxZ) / 2.0, 0.45, spin - Math.PI / 2.0, a255(iconAlpha.get()));
+        }
+    }
+
+    private static int a255(double v) {
+        return (int) Math.max(0, Math.min(255, Math.round(v * 255.0)));
     }
 
     private void set(double x1, double y1, double z1, double x2, double y2, double z2) {
