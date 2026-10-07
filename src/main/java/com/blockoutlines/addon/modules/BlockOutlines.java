@@ -2,6 +2,10 @@ package com.blockoutlines.addon.modules;
 
 import com.blockoutlines.addon.util.SvgIcon;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
+import meteordevelopment.meteorclient.gui.GuiTheme;
+import meteordevelopment.meteorclient.gui.widgets.WWidget;
+import meteordevelopment.meteorclient.gui.widgets.containers.WVerticalList;
+import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.events.world.BlockUpdateEvent;
 import meteordevelopment.meteorclient.renderer.MeshBuilder;
 import meteordevelopment.meteorclient.settings.BoolSetting;
@@ -16,6 +20,10 @@ import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.BlockState;
+import org.lwjgl.BufferUtils;
+import org.lwjgl.PointerBuffer;
+import org.lwjgl.system.MemoryUtil;
+import org.lwjgl.util.tinyfd.TinyFileDialogs;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
@@ -180,6 +188,51 @@ public class BlockOutlines extends Module {
         } catch (Exception ignored) {
         }
         icon = loaded != null && !loaded.layers.isEmpty() ? loaded : SvgIcon.load("/assets/blockoutlines/icon.svg");
+    }
+
+    /** Two buttons at the bottom of the module window: pick your own SVG, or go back to the built-in one. */
+    @Override
+    public WWidget getWidget(GuiTheme theme) {
+        WVerticalList list = theme.verticalList();
+        WButton upload = list.add(theme.button("Upload icon (.svg)")).expandX().widget();
+        WButton reset = list.add(theme.button("Reset icon")).expandX().widget();
+        upload.action = this::uploadIcon;
+        reset.action = this::resetIcon;
+        return list;
+    }
+
+    private void uploadIcon() {
+        try {
+            PointerBuffer filters = BufferUtils.createPointerBuffer(1);
+            filters.put(MemoryUtil.memASCII("*.svg"));
+            filters.rewind();
+            String path = TinyFileDialogs.tinyfd_openFileDialog("Select SVG icon", null, filters, "SVG files", false);
+            if (path == null) return;
+
+            String text = new String(java.nio.file.Files.readAllBytes(java.nio.file.Path.of(path)), java.nio.charset.StandardCharsets.UTF_8);
+            SvgIcon loaded = SvgIcon.parse(text);
+            if (loaded.layers.isEmpty()) {
+                error("That SVG has no shapes I can draw (polygon, rect or path).");
+                return;
+            }
+
+            java.io.File target = new java.io.File(mc.runDirectory, CUSTOM_ICON);
+            target.getParentFile().mkdirs();
+            java.nio.file.Files.write(target.toPath(), text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            icon = loaded;
+            info("Icon updated.");
+        } catch (Exception e) {
+            error("Could not load that SVG: " + e.getMessage());
+        }
+    }
+
+    private void resetIcon() {
+        try {
+            java.nio.file.Files.deleteIfExists(new java.io.File(mc.runDirectory, CUSTOM_ICON).toPath());
+        } catch (Exception ignored) {
+        }
+        icon = SvgIcon.load("/assets/blockoutlines/icon.svg");
+        info("Icon reset.");
     }
 
     @Override
