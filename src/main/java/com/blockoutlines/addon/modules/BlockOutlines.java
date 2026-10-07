@@ -203,6 +203,14 @@ public class BlockOutlines extends Module {
         MeshBuilder mesh = event.renderer.triangles;
         double cos = Math.cos(rotation), sin = Math.sin(rotation);
 
+        // The mesh buffers are only allocated on demand - reserve room first or the write hits a null pointer (native crash).
+        int vertexTotal = 0, indexTotal = 0;
+        for (SvgIcon.Layer layer : icon.layers) {
+            vertexTotal += layer.u.length;
+            indexTotal += layer.tris.length * 2;
+        }
+        mesh.ensureCapacity(vertexTotal, indexTotal);
+
         double layerY = y;
         for (SvgIcon.Layer layer : icon.layers) {
             Color c = layer.white ? new Color(255, 255, 255, alpha) : new Color(0, 0, 0, alpha);
