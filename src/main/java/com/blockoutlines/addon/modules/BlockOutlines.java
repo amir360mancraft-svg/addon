@@ -67,6 +67,20 @@ public class BlockOutlines extends Module {
         .build()
     );
 
+    public final Setting<SettingColor> iconColor = sgRender.add(new ColorSetting.Builder()
+        .name("icon-color")
+        .description("Color of the light (white) parts of the icon.")
+        .defaultValue(new SettingColor(255, 255, 255, 255))
+        .build()
+    );
+
+    public final Setting<SettingColor> iconDarkColor = sgRender.add(new ColorSetting.Builder()
+        .name("icon-dark-color")
+        .description("Color of the dark (black) parts of the icon.")
+        .defaultValue(new SettingColor(0, 0, 0, 255))
+        .build()
+    );
+
     public final Setting<Double> iconAlpha = sgRender.add(new DoubleSetting.Builder()
         .name("icon-alpha")
         .description("The opacity of the spinning icon on top of the block (0 hides it).")
@@ -302,7 +316,8 @@ public class BlockOutlines extends Module {
 
         double layerY = y;
         for (SvgIcon.Layer layer : icon.layers) {
-            Color c = layer.white ? new Color(255, 255, 255, alpha) : new Color(0, 0, 0, alpha);
+            SettingColor src = layer.white ? iconColor.get() : iconDarkColor.get();
+            Color c = new Color(src.r, src.g, src.b, alpha);
             int[] idx = new int[layer.u.length];
             for (int i = 0; i < idx.length; i++) {
                 double x = cx + radius * (layer.u[i] * cos - layer.v[i] * sin);
