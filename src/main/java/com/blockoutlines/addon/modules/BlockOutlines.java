@@ -1,5 +1,6 @@
 package com.blockoutlines.addon.modules;
 
+import com.blockoutlines.addon.BlockOutlinesAddon;
 import com.blockoutlines.addon.util.SvgIcon;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
@@ -14,7 +15,6 @@ import meteordevelopment.meteorclient.settings.DoubleSetting;
 import meteordevelopment.meteorclient.settings.IntSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
-import meteordevelopment.meteorclient.systems.modules.Categories;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
@@ -184,7 +184,7 @@ public class BlockOutlines extends Module {
     private double spin;
 
     public BlockOutlines() {
-        super(Categories.Render, "block-outlines", "Renders a smooth, custom-colored outline around the block you are looking at.");
+        super(BlockOutlinesAddon.CATEGORY, "better-outline", "Smooth custom block outline with a spinning icon and a fading box where blocks break.");
     }
 
     /** Uses .minecraft/meteor-client/block-outlines.svg when it exists, otherwise the icon built into the jar. */

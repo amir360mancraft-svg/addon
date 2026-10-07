@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "block-outlines-addon",
   "version": "${version}",
-  "name": "Block Outlines",
-  "description": "Meteor addon: smooth custom block outline with a black and white icon pop when the block breaks.",
+  "name": "Better Render",
+  "description": "Meteor addon: smooth block outline, spinning icon and break ESP.",
   "authors": [
-    "you"
+    "Just_Lukipuh"
   ],
   "icon": "assets/blockoutlines/icon.png",
   "environment": "client",
