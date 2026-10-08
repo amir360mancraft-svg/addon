@@ -3,7 +3,8 @@
   "package": "com.blockoutlines.addon.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
-    "BlockRenderManagerMixin"
+    "BlockRenderManagerMixin",
+    "GameRendererInvoker"
   ],
   "injectors": {
     "defaultRequire": 1

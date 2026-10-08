@@ -1,6 +1,7 @@
 package com.blockoutlines.addon;
 
 import com.blockoutlines.addon.modules.BlockOutlines;
+import com.blockoutlines.addon.modules.Saturation;
 import com.mojang.logging.LogUtils;
 import meteordevelopment.meteorclient.addons.GithubRepo;
 import meteordevelopment.meteorclient.addons.MeteorAddon;
@@ -20,6 +21,7 @@ public class BlockOutlinesAddon extends MeteorAddon {
     @Override
     public void onInitialize() {
         Modules.get().add(new BlockOutlines());
+        Modules.get().add(new Saturation());
         LOG.info("Better Render loaded");
     }
 
