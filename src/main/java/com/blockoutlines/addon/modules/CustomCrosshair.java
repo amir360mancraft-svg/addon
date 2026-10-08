@@ -175,8 +175,9 @@ public class CustomCrosshair extends Module {
         if (mc.currentScreen != null || mc.options.hudHidden) return;
 
         int sz = size.get();
-        int ox = event.screenWidth / 2 - sz / 2;
-        int oy = event.screenHeight / 2 - sz / 2;
+        // Meteor passes the scaled width as the height too, so read both from the window.
+        int ox = mc.getWindow().getScaledWidth() / 2 - sz / 2;
+        int oy = mc.getWindow().getScaledHeight() / 2 - sz / 2;
         double scale = sz / (double) GRID;
         int a = (int) Math.max(0, Math.min(255, Math.round(alpha.get() * 255.0)));
 
