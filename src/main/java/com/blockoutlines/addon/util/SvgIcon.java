@@ -44,6 +44,35 @@ public final class SvgIcon {
         return parse("<svg viewBox=\"0 0 100 100\"><polygon points=\"10,10 90,10 90,90 10,90\" fill=\"#fff\"/></svg>");
     }
 
+    /** Paints the shapes onto a grid x grid bitmap: 0 = empty, 1 = light (white) shape, 2 = dark (black) shape. */
+    public byte[] raster(int grid) {
+        byte[] out = new byte[grid * grid];
+        double half = grid / 2.0;
+        for (Layer l : layers) {
+            byte kind = (byte) (l.white ? 1 : 2);
+            for (int t = 0; t < l.tris.length; t += 3) {
+                double ax = (l.u[l.tris[t]] + 1) * half, ay = (l.v[l.tris[t]] + 1) * half;
+                double bx = (l.u[l.tris[t + 1]] + 1) * half, by = (l.v[l.tris[t + 1]] + 1) * half;
+                double cx = (l.u[l.tris[t + 2]] + 1) * half, cy = (l.v[l.tris[t + 2]] + 1) * half;
+                int x0 = Math.max(0, (int) Math.floor(Math.min(ax, Math.min(bx, cx))));
+                int x1 = Math.min(grid - 1, (int) Math.ceil(Math.max(ax, Math.max(bx, cx))));
+                int y0 = Math.max(0, (int) Math.floor(Math.min(ay, Math.min(by, cy))));
+                int y1 = Math.min(grid - 1, (int) Math.ceil(Math.max(ay, Math.max(by, cy))));
+                for (int y = y0; y <= y1; y++) {
+                    for (int x = x0; x <= x1; x++) {
+                        double px = x + 0.5, py = y + 0.5;
+                        double d1 = (px - bx) * (ay - by) - (ax - bx) * (py - by);
+                        double d2 = (px - cx) * (by - cy) - (bx - cx) * (py - cy);
+                        double d3 = (px - ax) * (cy - ay) - (cx - ax) * (py - ay);
+                        boolean neg = d1 < 0 || d2 < 0 || d3 < 0, pos = d1 > 0 || d2 > 0 || d3 > 0;
+                        if (!(neg && pos)) out[y * grid + x] = kind;
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
     public static SvgIcon parse(String svg) {
         SvgIcon icon = new SvgIcon();
 

@@ -1,7 +1,8 @@
 package com.blockoutlines.addon;
 
 import com.blockoutlines.addon.modules.BlockOutlines;
-import com.blockoutlines.addon.modules.Saturation;
+import com.blockoutlines.addon.modules.ColorGrading;
+import com.blockoutlines.addon.modules.CustomCrosshair;
 import com.mojang.logging.LogUtils;
 import meteordevelopment.meteorclient.addons.GithubRepo;
 import meteordevelopment.meteorclient.addons.MeteorAddon;
@@ -21,7 +22,8 @@ public class BlockOutlinesAddon extends MeteorAddon {
     @Override
     public void onInitialize() {
         Modules.get().add(new BlockOutlines());
-        Modules.get().add(new Saturation());
+        Modules.get().add(new ColorGrading());
+        Modules.get().add(new CustomCrosshair());
         LOG.info("Better Render loaded");
     }
 
