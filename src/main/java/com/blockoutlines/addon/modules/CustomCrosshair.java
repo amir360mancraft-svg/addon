@@ -1,6 +1,8 @@
 package com.blockoutlines.addon.modules;
 
 import com.blockoutlines.addon.BlockOutlinesAddon;
+import com.blockoutlines.addon.gui.CrosshairEditorScreen;
+import com.blockoutlines.addon.util.PixelGrid;
 import com.blockoutlines.addon.util.SvgIcon;
 import meteordevelopment.meteorclient.events.render.Render2DEvent;
 import meteordevelopment.meteorclient.gui.GuiTheme;
@@ -57,8 +59,8 @@ public class CustomCrosshair extends Module {
 
     public final Setting<Integer> size = sgGeneral.add(new IntSetting.Builder()
         .name("size")
-        .description("Size of the crosshair in GUI pixels.")
-        .defaultValue(30)
+        .description("Size of the crosshair in GUI pixels. 32 shows a drawn crosshair 1 pixel = 1 GUI pixel; multiples of 32 stay sharp.")
+        .defaultValue(32)
         .range(8, 256)
         .sliderRange(8, 128)
         .build()
@@ -93,11 +95,41 @@ public class CustomCrosshair extends Module {
     @Override
     public WWidget getWidget(GuiTheme theme) {
         WVerticalList list = theme.verticalList();
+        WButton draw = list.add(theme.button("Draw crosshair (32 x 32)")).expandX().widget();
         WButton upload = list.add(theme.button("Upload crosshair (.svg)")).expandX().widget();
         WButton reset = list.add(theme.button("Reset crosshair")).expandX().widget();
+        draw.action = this::openEditor;
         upload.action = this::uploadSvg;
         reset.action = this::resetSvg;
         return list;
+    }
+
+    /** Opens the pixel editor. It starts from your saved crosshair, or from an empty grid. */
+    private void openEditor() {
+        PixelGrid initial = new PixelGrid();
+        try {
+            java.io.File f = new java.io.File(mc.runDirectory, CUSTOM_SVG);
+            if (f.isFile()) initial = PixelGrid.fromSvg(new String(java.nio.file.Files.readAllBytes(f.toPath()), java.nio.charset.StandardCharsets.UTF_8));
+        } catch (Exception ignored) {
+        }
+        mc.setScreen(new CrosshairEditorScreen(mc.currentScreen, initial, this::saveDrawing));
+    }
+
+    private void saveDrawing(PixelGrid grid) {
+        if (grid.isEmpty()) {
+            resetSvg(); // nothing drawn: go back to the built-in crosshair instead of showing nothing
+            return;
+        }
+        try {
+            String svg = grid.toSvg();
+            java.io.File target = new java.io.File(mc.runDirectory, CUSTOM_SVG);
+            target.getParentFile().mkdirs();
+            java.nio.file.Files.write(target.toPath(), svg.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            buildRects(SvgIcon.parse(svg));
+            info("Crosshair saved.");
+        } catch (Exception e) {
+            error("Could not save the crosshair: " + e.getMessage());
+        }
     }
 
     private void uploadSvg() {
