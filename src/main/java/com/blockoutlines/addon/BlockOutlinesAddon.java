@@ -4,6 +4,7 @@ import com.blockoutlines.addon.modules.BlockOutlines;
 import com.blockoutlines.addon.modules.ColorGrading;
 import com.blockoutlines.addon.modules.CustomCrosshair;
 import com.blockoutlines.addon.modules.FakeElytra;
+import com.blockoutlines.addon.modules.SusChunk;
 import com.mojang.logging.LogUtils;
 import meteordevelopment.meteorclient.addons.GithubRepo;
 import meteordevelopment.meteorclient.addons.MeteorAddon;
@@ -14,10 +15,12 @@ import org.slf4j.Logger;
 public class BlockOutlinesAddon extends MeteorAddon {
     public static final Logger LOG = LogUtils.getLogger();
     public static final Category CATEGORY = new Category("Better Render");
+    public static final Category HUNTING = new Category("Base Hunting");
 
     @Override
     public void onRegisterCategories() {
         Modules.registerCategory(CATEGORY);
+        Modules.registerCategory(HUNTING);
     }
 
     @Override
@@ -26,6 +29,7 @@ public class BlockOutlinesAddon extends MeteorAddon {
         Modules.get().add(new ColorGrading());
         Modules.get().add(new CustomCrosshair());
         Modules.get().add(new FakeElytra());
+        Modules.get().add(new SusChunk());
         LOG.info("Better Render loaded");
     }
 
