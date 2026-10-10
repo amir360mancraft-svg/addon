@@ -27,7 +27,7 @@ public abstract class ItemStackMixin {
         }
     }
 
-    @Inject(method = "getTooltip", at = @At("RETURN"), require = 1)
+    @Inject(method = "getTooltip", at = @At("RETURN"), cancellable = true, require = 1)
     private void blockoutlines$fakeTooltip(CallbackInfoReturnable<List<Text>> cir) {
         FakeElytra module = Modules.get() != null ? Modules.get().get(FakeElytra.class) : null;
         ItemStack self = (ItemStack) (Object) this;
