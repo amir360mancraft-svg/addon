@@ -1,0 +1,16 @@
+{
+  "required": true,
+  "package": "com.blockoutlines.addon.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "BlockRenderManagerMixin",
+    "GameRendererInvoker",
+    "InGameHudMixin",
+    "BipedEntityRendererMixin",
+    "ItemModelManagerMixin",
+    "ItemStackMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
