@@ -5,6 +5,7 @@ import meteordevelopment.meteorclient.systems.modules.Modules;
 import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
+import net.minecraft.util.Rarity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -24,6 +25,15 @@ public abstract class ItemStackMixin {
         FakeElytra module = Modules.get() != null ? Modules.get().get(FakeElytra.class) : null;
         if (module != null && module.tooltipEnabled() && module.isTarget((ItemStack) (Object) this)) {
             cir.setReturnValue(Text.translatable("item.minecraft.elytra"));
+        }
+    }
+
+    /** An enchanted elytra in the Donut look: purple (epic) name, whatever the real item was. */
+    @Inject(method = "getRarity", at = @At("RETURN"), cancellable = true, require = 1)
+    private void blockoutlines$fakeRarity(CallbackInfoReturnable<Rarity> cir) {
+        FakeElytra module = Modules.get() != null ? Modules.get().get(FakeElytra.class) : null;
+        if (module != null && module.tooltipEnabled() && module.isTarget((ItemStack) (Object) this)) {
+            cir.setReturnValue(Rarity.EPIC);
         }
     }
 
