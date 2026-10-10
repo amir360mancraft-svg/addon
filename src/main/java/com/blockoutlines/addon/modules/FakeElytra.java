@@ -73,6 +73,15 @@ public class FakeElytra extends Module {
         .build()
     );
 
+    private final Setting<Boolean> debug = sgGeneral.add(new BoolSetting.Builder()
+        .name("debug")
+        .description("Prints in chat where the module thinks the item is (inventory slot, cursor, container, frame). Turn off before streaming.")
+        .defaultValue(true)
+        .build()
+    );
+
+    private String lastState = "";
+
     /** The picked item without count and damage. */
     private ItemStack fingerprint;
 
@@ -158,7 +167,10 @@ public class FakeElytra extends Module {
         int n = Math.min(41, inv.size());
         for (int i = 0; i < n; i++) if (matches(inv.getStack(i))) invM.add(i);
 
-        boolean cursor = matches(handler.getCursorStack());
+        ItemStack cursorStack = handler.getCursorStack();
+        boolean cursor = matches(cursorStack);
+        // same item type on the cursor, even if some data differs: good enough while the item just left its slot
+        boolean cursorLoose = cursor || (!cursorStack.isEmpty() && cursorStack.getItem() == fingerprint.getItem());
 
         List<Integer> contM = new ArrayList<>();
         String title = "";
@@ -179,13 +191,13 @@ public class FakeElytra extends Module {
             case SLOT -> {
                 if (!invM.contains(slot)) {
                     int moved = firstNew(invM, prevInv);
-                    if (cursor) where = Where.CURSOR;                       // picked up with the mouse
+                    if (cursorLoose) where = Where.CURSOR;                  // picked up with the mouse
                     else if (moved >= 0) slot = moved;                      // hotkey swap or shift click inside the inventory
                     else { where = Where.OUTSIDE; clearMemory(); pending = 100; } // gone: container, item frame, dropped
                 }
             }
             case CURSOR -> {
-                if (!cursor) {
+                if (!cursorLoose) {
                     int placed = firstNew(invM, prevInv);
                     if (placed >= 0) { where = Where.SLOT; slot = placed; }
                     else { where = Where.OUTSIDE; clearMemory(); pending = 100; }
@@ -214,6 +226,31 @@ public class FakeElytra extends Module {
         prevInv = invM;
         prevContainer = contM;
         prevFrames = frameM;
+
+        if (debug.get()) {
+            String state = describe();
+            if (!state.equals(lastState)) {
+                info("elytra: " + state);
+                lastState = state;
+            }
+        }
+    }
+
+    private String describe() {
+        return switch (where) {
+            case SLOT -> "inventory slot " + slot;
+            case CURSOR -> "on the mouse cursor";
+            case OUTSIDE -> frameId >= 0 ? "item frame #" + frameId
+                : containerIdx >= 0 ? "container '" + containerTitle + "' slot " + containerIdx
+                : pending > 0 ? "searching (" + pending + ")" : "unknown (nothing disguised)";
+        };
+    }
+
+    private boolean inAnySlot(ItemStack stack) {
+        var inv = mc.player.getInventory();
+        for (Slot sl : mc.player.currentScreenHandler.slots) if (sl.getStack() == stack) return true;
+        for (int i = 0; i < Math.min(41, inv.size()); i++) if (inv.getStack(i) == stack) return true;
+        return false;
     }
 
     /** True when this stack is the picked item (or, with follow-hand, the item in your hand). */
@@ -228,11 +265,14 @@ public class FakeElytra extends Module {
         switch (where) {
             case SLOT:
                 return slot >= 0 && slot < mc.player.getInventory().size() && stack == mc.player.getInventory().getStack(slot);
-            case CURSOR:
-                return stack == mc.player.currentScreenHandler.getCursorStack();
+            case CURSOR: {
+                ItemStack c = mc.player.currentScreenHandler.getCursorStack();
+                return stack == c || (ItemStack.areItemsAndComponentsEqual(stack, c) && !inAnySlot(stack));
+            }
             default:
                 if (frameId >= 0) {
-                    return mc.world != null && mc.world.getEntityById(frameId) instanceof ItemFrameEntity f && stack == f.getHeldItemStack();
+                    return mc.world != null && mc.world.getEntityById(frameId) instanceof ItemFrameEntity f
+                        && (stack == f.getHeldItemStack() || (ItemStack.areItemsAndComponentsEqual(stack, f.getHeldItemStack()) && !inAnySlot(stack)));
                 }
                 if (containerIdx >= 0) {
                     ScreenHandler h = mc.player.currentScreenHandler;
