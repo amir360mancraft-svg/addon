@@ -95,6 +95,9 @@ public class FakeElytra extends Module {
     private List<Integer> prevInv = new ArrayList<>();
     private List<Integer> prevContainer = new ArrayList<>();
     private List<Integer> prevFrames = new ArrayList<>();
+    /** What the container and the frames looked like just before the item left the inventory: whatever is new is the item. */
+    private List<Integer> baseContainer = new ArrayList<>();
+    private List<Integer> baseFrames = new ArrayList<>();
 
     public FakeElytra() {
         super(BlockOutlinesAddon.CATEGORY, "fake-elytra", "Shows the item in your hand as an elytra (visual only, client side).");
@@ -130,6 +133,8 @@ public class FakeElytra extends Module {
         prevInv = new ArrayList<>();
         prevContainer = new ArrayList<>();
         prevFrames = new ArrayList<>();
+        baseContainer = new ArrayList<>();
+        baseFrames = new ArrayList<>();
     }
 
     private void clearMemory() {
@@ -193,14 +198,14 @@ public class FakeElytra extends Module {
                     int moved = firstNew(invM, prevInv);
                     if (cursorLoose) where = Where.CURSOR;                  // picked up with the mouse
                     else if (moved >= 0) slot = moved;                      // hotkey swap or shift click inside the inventory
-                    else { where = Where.OUTSIDE; clearMemory(); pending = 100; } // gone: container, item frame, dropped
+                    else lose(contM, frameM, title);                        // gone: container, item frame, dropped
                 }
             }
             case CURSOR -> {
                 if (!cursorLoose) {
                     int placed = firstNew(invM, prevInv);
                     if (placed >= 0) { where = Where.SLOT; slot = placed; }
-                    else { where = Where.OUTSIDE; clearMemory(); pending = 100; }
+                    else lose(contM, frameM, title);
                 }
             }
             case OUTSIDE -> {
@@ -213,12 +218,15 @@ public class FakeElytra extends Module {
                         int moved = firstNew(contM, prevContainer); // moved to another slot of the same container
                         if (moved >= 0) containerIdx = moved;
                     }
-                } else if (frameId < 0 && pending > 0) {
-                    pending--;
-                    int inContainer = firstNew(contM, prevContainer);
-                    int inFrame = firstNew(frameM, prevFrames);
-                    if (mc.currentScreen != null && inContainer >= 0) { containerIdx = inContainer; containerTitle = title; }
-                    else if (mc.currentScreen == null && inFrame >= 0) frameId = inFrame;
+                } else if (frameId < 0) {
+                    if (pending > 0) {
+                        pending--;
+                        tryBind(contM, frameM, title);
+                    } else if (invM.isEmpty() && !cursor) {
+                        // searched long enough: bind only if exactly one matching stack is visible
+                        if (mc.currentScreen != null && contM.size() == 1) { containerIdx = contM.get(0); containerTitle = title; }
+                        else if (mc.currentScreen == null && frameM.size() == 1 && contM.isEmpty()) frameId = frameM.get(0);
+                    }
                 }
             }
         }
@@ -236,13 +244,30 @@ public class FakeElytra extends Module {
         }
     }
 
+    /** The item just left the inventory: remember what the surroundings looked like before, and look right away where it went. */
+    private void lose(List<Integer> contM, List<Integer> frameM, String title) {
+        where = Where.OUTSIDE;
+        clearMemory();
+        pending = 100;
+        baseContainer = new ArrayList<>(prevContainer);
+        baseFrames = new ArrayList<>(prevFrames);
+        tryBind(contM, frameM, title);
+    }
+
+    private void tryBind(List<Integer> contM, List<Integer> frameM, String title) {
+        int inContainer = firstNew(contM, baseContainer);
+        int inFrame = firstNew(frameM, baseFrames);
+        if (mc.currentScreen != null && inContainer >= 0) { containerIdx = inContainer; containerTitle = title; }
+        else if (mc.currentScreen == null && inFrame >= 0) frameId = inFrame;
+    }
+
     private String describe() {
         return switch (where) {
             case SLOT -> "inventory slot " + slot;
             case CURSOR -> "on the mouse cursor";
             case OUTSIDE -> frameId >= 0 ? "item frame #" + frameId
                 : containerIdx >= 0 ? "container '" + containerTitle + "' slot " + containerIdx
-                : pending > 0 ? "searching (" + pending + ")" : "unknown (nothing disguised)";
+                : pending > 0 ? "searching" : "unknown (nothing disguised)";
         };
     }
 

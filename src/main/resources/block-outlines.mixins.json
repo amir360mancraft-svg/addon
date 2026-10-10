@@ -6,6 +6,7 @@
     "BlockRenderManagerMixin",
     "GameRendererInvoker",
     "InGameHudMixin",
+    "BipedEntityRendererMixin",
     "ItemModelManagerMixin",
     "ItemStackMixin"
   ],
