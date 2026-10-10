@@ -6,7 +6,7 @@ package com.blockoutlines.addon.util;
  * No Minecraft code in here, so it can be tested on its own.
  */
 public final class PixelGrid {
-    public static final int SIZE = 32;
+    public static final int SIZE = 33; // odd, so there is a real centre cell (16)
 
     public static final byte EMPTY = 0, WHITE = 1, BLACK = 2;
 
@@ -95,7 +95,7 @@ public final class PixelGrid {
         return sb.toString();
     }
 
-    /** Reads any SVG the addon understands and paints it onto the 32 x 32 grid (nearest cell). */
+    /** Reads any SVG the addon understands and paints it onto the 33 x 33 grid (nearest cell). */
     public static PixelGrid fromSvg(String svg) {
         PixelGrid g = new PixelGrid();
         byte[] raster = SvgIcon.parse(svg).raster(SIZE);

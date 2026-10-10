@@ -5,7 +5,9 @@
   "client": [
     "BlockRenderManagerMixin",
     "GameRendererInvoker",
-    "InGameHudMixin"
+    "InGameHudMixin",
+    "ItemModelManagerMixin",
+    "ItemStackMixin"
   ],
   "injectors": {
     "defaultRequire": 1

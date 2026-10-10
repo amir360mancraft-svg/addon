@@ -10,7 +10,7 @@ import net.minecraft.text.Text;
 import java.util.function.Consumer;
 
 /**
- * A pixel editor for the crosshair: a 32 x 32 grid where every cell is white, black or empty.
+ * A pixel editor for the crosshair: a 33 x 33 grid where every cell is white, black or empty.
  * Left click paints with the chosen tool, right click erases. Escape or Cancel throws the changes away.
  */
 public class CrosshairEditorScreen extends Screen {
@@ -150,10 +150,9 @@ public class CrosshairEditorScreen extends Screen {
             }
         }
 
-        // the crosshair centre lies between cell 15 and 16: mark it inside the grid gaps
-        int mid = (PixelGrid.SIZE / 2) * cell - 1;
-        context.fill(gridX + mid, gridY, gridX + mid + 1, gridY + gridPx, 0xFFB38F00);
-        context.fill(gridX, gridY + mid, gridX + gridPx, gridY + mid + 1, 0xFFB38F00);
+        // the crosshair centre is the middle cell: mark it
+        int c = PixelGrid.SIZE / 2;
+        outline(context, gridX + c * cell, gridY + c * cell, gridX + c * cell + cell - 1, gridY + c * cell + cell - 1, 0xFFB38F00);
 
         // hovered cell
         int hx = cellX(mouseX), hy = cellY(mouseY);
@@ -162,10 +161,10 @@ public class CrosshairEditorScreen extends Screen {
             outline(context, px, py, px + cell - 1, py + cell - 1, 0xFFFFD400);
         }
 
-        context.drawTextWithShadow(textRenderer, "Set size = 32 in the module for 1:1", gridX, gridY + gridPx + 6, 0xFFB0B0B0);
+        context.drawTextWithShadow(textRenderer, "Set size = 33 in the module for 1:1 (yellow = centre)", gridX, gridY + gridPx + 6, 0xFFB0B0B0);
 
         // real size preview
-        context.drawTextWithShadow(textRenderer, "Preview (32 x 32)", panelX, panelY, 0xFFFFFFFF);
+        context.drawTextWithShadow(textRenderer, "Preview (33 x 33)", panelX, panelY, 0xFFFFFFFF);
         int pvY = panelY + 12;
         context.fill(panelX, pvY, panelX + PixelGrid.SIZE, pvY + PixelGrid.SIZE, 0xFF707070);
         for (int y = 0; y < PixelGrid.SIZE; y++) {
