@@ -1,6 +1,7 @@
 package com.blockoutlines.addon.modules;
 
 import com.blockoutlines.addon.BlockOutlinesAddon;
+import meteordevelopment.meteorclient.events.render.Render2DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.Setting;
@@ -10,6 +11,7 @@ import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.decoration.ItemFrameEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -17,7 +19,9 @@ import net.minecraft.screen.ScreenHandler;
 import net.minecraft.screen.slot.Slot;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
@@ -97,7 +101,14 @@ public class FakeElytra extends Module {
     private List<Integer> prevFrames = new ArrayList<>();
     /** What the container and the frames looked like just before the item left the inventory: whatever is new is the item. */
     private List<Integer> baseContainer = new ArrayList<>();
-    private List<Integer> baseFrames = new ArrayList<>();
+
+    /** Frames that currently hold the item, with the tick they were first seen holding it (the server tells us late). */
+    private final Map<Integer, Integer> frameSeen = new HashMap<>();
+    /** Same for dropped item entities lying on the ground. */
+    private final Map<Integer, Integer> dropSeen = new HashMap<>();
+    private int dropId = -1;               // dropped item entity id, when the item lies on the ground
+    private int tickCount;
+    private boolean firstFrameScan;
 
     public FakeElytra() {
         super(BlockOutlinesAddon.CATEGORY, "fake-elytra", "Shows the item in your hand as an elytra (visual only, client side).");
@@ -134,11 +145,14 @@ public class FakeElytra extends Module {
         prevContainer = new ArrayList<>();
         prevFrames = new ArrayList<>();
         baseContainer = new ArrayList<>();
-        baseFrames = new ArrayList<>();
+        frameSeen.clear();
+        dropSeen.clear();
+        firstFrameScan = true;
     }
 
     private void clearMemory() {
         frameId = -1;
+        dropId = -1;
         containerIdx = -1;
         containerTitle = "";
     }
@@ -163,6 +177,17 @@ public class FakeElytra extends Module {
 
     @EventHandler
     private void onTick(TickEvent.Post event) {
+        tickCount++;
+        update(true);
+    }
+
+    /** Also runs every frame, before the screen is drawn, so a moved item never shows its real look for a frame. */
+    @EventHandler
+    private void onRender2D(Render2DEvent event) {
+        update(false);
+    }
+
+    private void update(boolean tick) {
         if (mc.player == null || mc.world == null || fingerprint == null || followHand.get()) return;
 
         var inv = mc.player.getInventory();
@@ -188,9 +213,23 @@ public class FakeElytra extends Module {
         }
 
         List<Integer> frameM = new ArrayList<>();
+        List<Integer> dropM = new ArrayList<>();
         for (Entity e : mc.world.getEntities()) {
-            if (e instanceof ItemFrameEntity f && e.squaredDistanceTo(mc.player) < 144 && matches(f.getHeldItemStack())) frameM.add(e.getId());
+            if (e instanceof ItemFrameEntity f) {
+                if (e.squaredDistanceTo(mc.player) < 144 && matches(f.getHeldItemStack())) frameM.add(e.getId());
+            } else if (e instanceof ItemEntity d) {
+                if (e.squaredDistanceTo(mc.player) < 400 && matches(d.getStack())) dropM.add(e.getId());
+            }
         }
+
+        for (int id : frameM) {
+            if (!frameSeen.containsKey(id) && !firstFrameScan && debug.get()) info("elytra: frame #" + id + " now holds a matching item");
+        }
+        for (int id : frameM) frameSeen.putIfAbsent(id, firstFrameScan ? -1000 : tickCount);
+        frameSeen.keySet().removeIf(id -> !frameM.contains(id));
+        for (int id : dropM) dropSeen.putIfAbsent(id, firstFrameScan ? -1000 : tickCount);
+        dropSeen.keySet().removeIf(id -> !dropM.contains(id));
+        firstFrameScan = false;
 
         switch (where) {
             case SLOT -> {
@@ -210,22 +249,29 @@ public class FakeElytra extends Module {
             }
             case OUTSIDE -> {
                 int back = firstNew(invM, prevInv);
-                boolean stillThere = (containerIdx >= 0 && contM.contains(containerIdx)) || (frameId >= 0 && frameM.contains(frameId));
+                boolean stillThere = (containerIdx >= 0 && contM.contains(containerIdx)) || (frameId >= 0 && frameM.contains(frameId))
+                    || (dropId >= 0 && dropM.contains(dropId));
                 if (back >= 0) { where = Where.SLOT; slot = back; clearMemory(); }
                 else if (cursor && !stillThere) { where = Where.CURSOR; clearMemory(); } // taken out with the mouse
-                else if (containerIdx >= 0) {
+                else if (frameId >= 0 && !frameM.contains(frameId)) { // taken out of the frame: it is probably lying on the ground now
+                    frameId = -1;
+                    pending = 100;
+                    baseContainer = new ArrayList<>(prevContainer);
+                    tryBind(contM, frameM, title);
+                } else if (containerIdx >= 0) {
                     if (mc.currentScreen != null && title.equals(containerTitle) && !contM.contains(containerIdx)) {
                         int moved = firstNew(contM, prevContainer); // moved to another slot of the same container
                         if (moved >= 0) containerIdx = moved;
                     }
-                } else if (frameId < 0) {
+                } else if (frameId < 0 && dropId < 0) {
                     if (pending > 0) {
-                        pending--;
+                        if (tick) pending--;
                         tryBind(contM, frameM, title);
                     } else if (invM.isEmpty() && !cursor) {
                         // searched long enough: bind only if exactly one matching stack is visible
                         if (mc.currentScreen != null && contM.size() == 1) { containerIdx = contM.get(0); containerTitle = title; }
-                        else if (mc.currentScreen == null && frameM.size() == 1 && contM.isEmpty()) frameId = frameM.get(0);
+                        else if (mc.currentScreen == null && frameM.size() == 1 && contM.isEmpty() && dropM.isEmpty()) frameId = frameM.get(0);
+                        else if (mc.currentScreen == null && dropM.size() == 1 && contM.isEmpty() && frameM.isEmpty()) dropId = dropM.get(0);
                     }
                 }
             }
@@ -249,23 +295,37 @@ public class FakeElytra extends Module {
         where = Where.OUTSIDE;
         clearMemory();
         pending = 100;
+        if (debug.get() && tickCount - lastLostLog > 5) { info("elytra: the item left your inventory (frames nearby: " + frameM.size() + ")"); lastLostLog = tickCount; }
         baseContainer = new ArrayList<>(prevContainer);
-        baseFrames = new ArrayList<>(prevFrames);
         tryBind(contM, frameM, title);
     }
 
     private void tryBind(List<Integer> contM, List<Integer> frameM, String title) {
         int inContainer = firstNew(contM, baseContainer);
-        int inFrame = firstNew(frameM, baseFrames);
-        if (mc.currentScreen != null && inContainer >= 0) { containerIdx = inContainer; containerTitle = title; }
-        else if (mc.currentScreen == null && inFrame >= 0) frameId = inFrame;
+        if (mc.currentScreen != null && inContainer >= 0) { containerIdx = inContainer; containerTitle = title; return; }
+
+        // item frame or dropped item: the one that started holding / showing the item most recently (within 3 seconds)
+        int bestFrame = -1, frameTime = -1, bestDrop = -1, dropTime = -1;
+        for (Map.Entry<Integer, Integer> en : frameSeen.entrySet()) {
+            int seen = en.getValue();
+            if (seen > -1000 && tickCount - seen <= 60 && seen >= frameTime) { bestFrame = en.getKey(); frameTime = seen; }
+        }
+        for (Map.Entry<Integer, Integer> en : dropSeen.entrySet()) {
+            int seen = en.getValue();
+            if (seen > -1000 && tickCount - seen <= 60 && seen >= dropTime) { bestDrop = en.getKey(); dropTime = seen; }
+        }
+        if (mc.currentScreen == null && bestFrame >= 0 && frameTime >= dropTime) frameId = bestFrame;
+        else if (bestDrop >= 0) dropId = bestDrop;
     }
+
+    private int lastLostLog = -1000;
 
     private String describe() {
         return switch (where) {
             case SLOT -> "inventory slot " + slot;
             case CURSOR -> "on the mouse cursor";
-            case OUTSIDE -> frameId >= 0 ? "item frame #" + frameId
+            case OUTSIDE -> dropId >= 0 ? "dropped item #" + dropId
+                : frameId >= 0 ? "item frame #" + frameId
                 : containerIdx >= 0 ? "container '" + containerTitle + "' slot " + containerIdx
                 : pending > 0 ? "searching" : "unknown (nothing disguised)";
         };
@@ -295,6 +355,10 @@ public class FakeElytra extends Module {
                 return stack == c || (ItemStack.areItemsAndComponentsEqual(stack, c) && !inAnySlot(stack));
             }
             default:
+                if (dropId >= 0) {
+                    return mc.world != null && mc.world.getEntityById(dropId) instanceof ItemEntity d
+                        && (stack == d.getStack() || (ItemStack.areItemsAndComponentsEqual(stack, d.getStack()) && !inAnySlot(stack)));
+                }
                 if (frameId >= 0) {
                     return mc.world != null && mc.world.getEntityById(frameId) instanceof ItemFrameEntity f
                         && (stack == f.getHeldItemStack() || (ItemStack.areItemsAndComponentsEqual(stack, f.getHeldItemStack()) && !inAnySlot(stack)));
