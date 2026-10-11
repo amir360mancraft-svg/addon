@@ -4,6 +4,8 @@ import com.blockoutlines.addon.modules.BlockOutlines;
 import com.blockoutlines.addon.modules.ColorGrading;
 import com.blockoutlines.addon.modules.CustomCrosshair;
 import com.blockoutlines.addon.modules.FakeElytra;
+import com.blockoutlines.addon.modules.OgChunkFinder;
+import com.blockoutlines.addon.modules.PlayerSigns;
 import com.blockoutlines.addon.modules.SusChunk;
 import com.mojang.logging.LogUtils;
 import meteordevelopment.meteorclient.addons.GithubRepo;
@@ -30,6 +32,8 @@ public class BlockOutlinesAddon extends MeteorAddon {
         Modules.get().add(new CustomCrosshair());
         Modules.get().add(new FakeElytra());
         Modules.get().add(new SusChunk());
+        Modules.get().add(new PlayerSigns());
+        Modules.get().add(new OgChunkFinder());
         LOG.info("Better Render loaded");
     }
 

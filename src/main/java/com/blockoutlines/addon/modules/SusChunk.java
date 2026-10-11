@@ -549,7 +549,7 @@ public class SusChunk extends Module {
             double y1, y2;
             if (fullHeight.get()) {
                 y1 = mc.world.getBottomY();
-                y2 = mc.world.getBottomY() + mc.world.getHeight();
+                y2 = mc.world.getBottomY() + mc.world.getDimension().height();
             } else {
                 y1 = h.minY - 1;
                 y2 = h.maxY + 2;
