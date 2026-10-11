@@ -30,7 +30,8 @@ import java.util.Random;
  * drawn in the 3D render event.
  */
 public class StarrySky extends Module {
-    private static final int RING = 14; // segments of one nebula cloud
+    private static final int RING = 12; // segments of one puff
+    private static final int PUFFS = 5; // puffs per smoke mass
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgSky = settings.createGroup("Sky color");
@@ -68,14 +69,14 @@ public class StarrySky extends Module {
     private final Setting<SettingColor> skyColorA = sgSky.add(new ColorSetting.Builder()
         .name("sky-color")
         .description("Main color of the sky.")
-        .defaultValue(new SettingColor(70, 150, 255, 255))
+        .defaultValue(new SettingColor(40, 150, 235, 255))
         .build()
     );
 
     private final Setting<SettingColor> skyColorB = sgSky.add(new ColorSetting.Builder()
         .name("sky-color-2")
-        .description("The sky slowly drifts between this color and the main one.")
-        .defaultValue(new SettingColor(130, 110, 255, 255))
+        .description("The sky slowly and smoothly blends between this color and the main one (try two shades of the same color for the softest look).")
+        .defaultValue(new SettingColor(25, 70, 175, 255))
         .build()
     );
 
@@ -89,7 +90,7 @@ public class StarrySky extends Module {
     private final Setting<Double> colorShiftSpeed = sgSky.add(new DoubleSetting.Builder()
         .name("color-shift-speed")
         .description("How fast the sky color drifts.")
-        .defaultValue(0.15)
+        .defaultValue(0.12)
         .range(0.01, 1.0)
         .sliderRange(0.01, 1.0)
         .visible(colorShift::get)
@@ -98,23 +99,31 @@ public class StarrySky extends Module {
 
     private final Setting<Boolean> fogTint = sgSky.add(new BoolSetting.Builder()
         .name("fog-tint")
-        .description("Tint the fog so the horizon fades into a soft blue haze.")
+        .description("Change the color of the game fog. Off = normal Minecraft fog (the safe default).")
+        .defaultValue(false)
+        .build()
+    );
+
+    private final Setting<Boolean> fogFollowsSky = sgSky.add(new BoolSetting.Builder()
+        .name("fog-follows-sky")
+        .description("The fog takes the current sky color, so the horizon melts into the sky instead of showing a different color.")
         .defaultValue(true)
+        .visible(fogTint::get)
         .build()
     );
 
     private final Setting<SettingColor> fogColor = sgSky.add(new ColorSetting.Builder()
         .name("fog-color")
-        .description("Color of the haze.")
-        .defaultValue(new SettingColor(150, 205, 255, 255))
-        .visible(fogTint::get)
+        .description("Color of the haze when it does not follow the sky.")
+        .defaultValue(new SettingColor(110, 175, 240, 255))
+        .visible(() -> fogTint.get() && !fogFollowsSky.get())
         .build()
     );
 
     private final Setting<Double> fogStrength = sgSky.add(new DoubleSetting.Builder()
         .name("fog-strength")
         .description("How much of the normal fog color is replaced (0 = none, 1 = all).")
-        .defaultValue(0.6)
+        .defaultValue(0.7)
         .range(0, 1)
         .sliderRange(0, 1)
         .visible(fogTint::get)
@@ -131,18 +140,18 @@ public class StarrySky extends Module {
 
     private final Setting<Integer> nebulaCount = sgNebula.add(new IntSetting.Builder()
         .name("cloud-count")
-        .description("How many clouds are drawn.")
-        .defaultValue(14)
-        .range(1, 40)
-        .sliderRange(4, 30)
+        .description("How many big smoke masses drift across the sky (each one is made of several soft puffs).")
+        .defaultValue(7)
+        .range(1, 20)
+        .sliderRange(2, 14)
         .visible(nebula::get)
         .build()
     );
 
     private final Setting<Double> nebulaOpacity = sgNebula.add(new DoubleSetting.Builder()
         .name("cloud-opacity")
-        .description("How strong the clouds are.")
-        .defaultValue(0.35)
+        .description("How strong the smoke is.")
+        .defaultValue(0.42)
         .range(0.05, 1.0)
         .sliderRange(0.05, 1.0)
         .visible(nebula::get)
@@ -152,23 +161,33 @@ public class StarrySky extends Module {
     private final Setting<SettingColor> nebulaColor1 = sgNebula.add(new ColorSetting.Builder()
         .name("cloud-color-1")
         .description("Bright cloud color.")
-        .defaultValue(new SettingColor(80, 190, 255, 255))
+        .defaultValue(new SettingColor(70, 190, 255, 255))
         .visible(nebula::get)
         .build()
     );
 
     private final Setting<SettingColor> nebulaColor2 = sgNebula.add(new ColorSetting.Builder()
         .name("cloud-color-2")
-        .description("Second cloud color.")
-        .defaultValue(new SettingColor(150, 110, 255, 255))
+        .description("Second (deeper) smoke color.")
+        .defaultValue(new SettingColor(40, 100, 210, 255))
         .visible(nebula::get)
         .build()
     );
 
     private final Setting<SettingColor> nebulaDark = sgNebula.add(new ColorSetting.Builder()
         .name("dark-cloud-color")
-        .description("Dark clouds that add depth.")
-        .defaultValue(new SettingColor(15, 25, 70, 255))
+        .description("Dark smoke that adds depth.")
+        .defaultValue(new SettingColor(6, 16, 52, 255))
+        .visible(nebula::get)
+        .build()
+    );
+
+    private final Setting<Double> cloudSpeed = sgNebula.add(new DoubleSetting.Builder()
+        .name("cloud-speed")
+        .description("How fast the smoke masses wander across the sky. 1 is calm, higher is faster.")
+        .defaultValue(1.0)
+        .range(0.0, 6.0)
+        .sliderRange(0.0, 4.0)
         .visible(nebula::get)
         .build()
     );
@@ -255,7 +274,7 @@ public class StarrySky extends Module {
     private final Setting<Double> shootingInterval = sgShooting.add(new DoubleSetting.Builder()
         .name("interval")
         .description("Average seconds between shooting stars.")
-        .defaultValue(4.0)
+        .defaultValue(2.5)
         .range(0.5, 30)
         .sliderRange(0.5, 15)
         .visible(shooting::get)
@@ -265,7 +284,7 @@ public class StarrySky extends Module {
     private final Setting<SettingColor> shootingColor = sgShooting.add(new ColorSetting.Builder()
         .name("shooting-color")
         .description("Color of the shooting stars.")
-        .defaultValue(new SettingColor(190, 225, 255, 255))
+        .defaultValue(new SettingColor(170, 220, 255, 255))
         .visible(shooting::get)
         .build()
     );
@@ -279,11 +298,13 @@ public class StarrySky extends Module {
     }
 
     private static class Cloud {
-        double azimuth, elevation; // direction
-        double radius;             // angular radius in radians
+        double az0, elMid, elAmp;   // center of the smoke mass it belongs to
+        double velAz, elFreq;       // how the mass wanders (random per mass)
+        double offDist, offAng, offSpin; // where this puff sits inside the mass
+        double radius;              // angular radius in radians
         double alpha;
         double phase, speed;
-        int kind;                  // 0 bright, 1 second color, 2 dark
+        int kind;                   // 0 bright, 1 second color, 2 dark
     }
 
     private static class Meteor {
@@ -324,30 +345,41 @@ public class StarrySky extends Module {
         return !overworldOnly.get() || PlayerUtils.getDimension() == Dimension.Overworld;
     }
 
+    /** Current sky color (r, g, b as 0..255), blended between the two chosen colors. */
+    private int[] skyRgb() {
+        SettingColor a = skyColorA.get(), b = skyColorB.get();
+        double t = 0;
+        if (colorShift.get()) {
+            t = 0.5 + 0.5 * Math.sin(System.nanoTime() / 1.0e9 * colorShiftSpeed.get());
+            t = t * t * (3 - 2 * t); // smoothstep: lingers on each color, blends gently between them
+        }
+        return new int[]{(int) (a.r + (b.r - a.r) * t), (int) (a.g + (b.g - a.g) * t), (int) (a.b + (b.b - a.b) * t)};
+    }
+
     /** The sky color, or -1 when the sky should not be changed. Packed like Meteor does it. */
     public int skyColorPacked() {
         if (!applies()) return -1;
-
-        SettingColor a = skyColorA.get(), b = skyColorB.get();
-        double t = 0;
-        if (colorShift.get()) t = 0.5 + 0.5 * Math.sin(System.nanoTime() / 1.0e9 * colorShiftSpeed.get());
-
-        int r = (int) (a.r + (b.r - a.r) * t);
-        int g = (int) (a.g + (b.g - a.g) * t);
-        int bl = (int) (a.b + (b.b - a.b) * t);
-        return new Color(r, g, bl, 255).getPacked();
+        int[] c = skyRgb();
+        return new Color(c[0], c[1], c[2], 255).getPacked();
     }
 
     /** The fog color: the normal one mixed with the haze color, or the same one when the fog should not change. */
     public Vector4f fogColor(Vector4f original) {
         if (!applies() || !fogTint.get()) return original;
 
-        SettingColor f = fogColor.get();
+        float fr, fg, fb;
+        if (fogFollowsSky.get()) {
+            int[] c = skyRgb();
+            fr = c[0] / 255f; fg = c[1] / 255f; fb = c[2] / 255f;
+        } else {
+            SettingColor f = fogColor.get();
+            fr = f.r / 255f; fg = f.g / 255f; fb = f.b / 255f;
+        }
         float s = fogStrength.get().floatValue();
         return new Vector4f(
-            original.x + (f.r / 255f - original.x) * s,
-            original.y + (f.g / 255f - original.y) * s,
-            original.z + (f.b / 255f - original.z) * s,
+            original.x + (fr - original.x) * s,
+            original.y + (fg - original.y) * s,
+            original.z + (fb - original.z) * s,
             original.w
         );
     }
@@ -384,16 +416,28 @@ public class StarrySky extends Module {
             builtClouds = nebulaCount.get();
             cloudList.clear();
             Random r = new Random(104729);
-            for (int i = 0; i < builtClouds; i++) {
-                Cloud c = new Cloud();
-                c.azimuth = r.nextDouble() * Math.PI * 2;
-                c.elevation = minEl + 0.1 + r.nextDouble() * (Math.PI / 2 - minEl - 0.1);
-                c.radius = 0.25 + r.nextDouble() * 0.45;
-                c.alpha = 0.5 + r.nextDouble() * 0.5;
-                c.phase = r.nextDouble() * Math.PI * 2;
-                c.speed = 0.05 + r.nextDouble() * 0.12;
-                c.kind = i % 3;
-                cloudList.add(c);
+            for (int m = 0; m < builtClouds; m++) {
+                double az0 = r.nextDouble() * Math.PI * 2;
+                double elMid = Math.max(minEl + 0.25, 0.35) + r.nextDouble() * 0.75;
+                double elAmp = 0.1 + r.nextDouble() * 0.25;
+                // every mass picks its own random direction and speed
+                double velAz = (r.nextBoolean() ? 1 : -1) * (0.012 + r.nextDouble() * 0.035);
+                double elFreq = 0.02 + r.nextDouble() * 0.05;
+                int massKind = m % 3;
+                for (int k = 0; k < PUFFS; k++) {
+                    Cloud c = new Cloud();
+                    c.az0 = az0; c.elMid = elMid; c.elAmp = elAmp;
+                    c.velAz = velAz; c.elFreq = elFreq;
+                    c.offDist = 0.1 + r.nextDouble() * 0.5;
+                    c.offAng = r.nextDouble() * Math.PI * 2;
+                    c.offSpin = (r.nextBoolean() ? 1 : -1) * (0.03 + r.nextDouble() * 0.09);
+                    c.radius = 0.45 + r.nextDouble() * 0.5;
+                    c.alpha = 0.55 + r.nextDouble() * 0.45;
+                    c.phase = r.nextDouble() * Math.PI * 2;
+                    c.speed = 0.08 + r.nextDouble() * 0.12;
+                    c.kind = k == PUFFS - 1 ? (massKind + 1) % 3 : massKind;
+                    cloudList.add(c);
+                }
             }
         }
     }
@@ -471,22 +515,31 @@ public class StarrySky extends Module {
     private void drawClouds(Renderer3D r, double t, double cx, double cy, double cz, double radius, double cs, double sn) {
         double opacity = nebulaOpacity.get();
         boolean twist = swirl.get();
+        double tm = t * cloudSpeed.get();
+        double minEl = Math.toRadians(minElevation.get()) + 0.05;
 
-        double[] ringA = new double[(RING + 1) * 3];
-        double[] ringB = new double[(RING + 1) * 3];
+        // three rings per puff: the alpha fades 1 -> 0.6 -> 0.25 -> 0, which gives a soft smoky edge
+        final double[] ringScale = {0.38, 0.72, 1.0};
+        final double[] ringAlpha = {0.6, 0.26, 0.0};
+        double[][] ring = new double[3][(RING + 1) * 3];
 
         for (Cloud c : cloudList) {
             SettingColor col = c.kind == 0 ? nebulaColor1.get() : c.kind == 1 ? nebulaColor2.get() : nebulaDark.get();
 
-            // slow drift in azimuth and a gentle breathing
-            double az = c.azimuth + t * c.speed * 0.2;
-            double el = c.elevation + 0.04 * Math.sin(t * c.speed + c.phase);
+            // the whole mass wanders: it moves along its own direction and slowly rises and sinks
+            double elc = c.elMid + c.elAmp * Math.sin(tm * c.elFreq * 6 + c.az0);
+            double azc = c.az0 + tm * c.velAz;
+            // the puffs orbit inside the mass, so its shape keeps changing
+            double oa = c.offAng + tm * c.offSpin;
+            double el = Math.max(minEl, Math.min(1.45, elc + Math.sin(oa) * c.offDist * 0.6));
+            double az = azc + Math.cos(oa) * c.offDist / Math.max(0.3, Math.cos(el));
+
             double ce = Math.cos(el);
             double dx0 = ce * Math.cos(az), dy = Math.sin(el), dz0 = ce * Math.sin(az);
             double dx = dx0 * cs - dz0 * sn, dz = dx0 * sn + dz0 * cs;
 
-            double rad = c.radius * (1 + 0.1 * Math.sin(t * c.speed * 1.7 + c.phase));
-            double a0 = c.alpha * opacity * (c.kind == 2 ? 1.1 : 0.9) * (0.8 + 0.2 * Math.sin(t * c.speed * 2 + c.phase));
+            double rad = c.radius * (1 + 0.12 * Math.sin(tm * c.speed * 1.7 + c.phase));
+            double a0 = c.alpha * opacity * (c.kind == 2 ? 1.15 : 0.9) * (0.8 + 0.2 * Math.sin(tm * c.speed * 2 + c.phase));
 
             double ux, uy, uz;
             if (Math.abs(dy) > 0.98) { ux = 1; uy = 0; uz = 0; }
@@ -497,32 +550,35 @@ public class StarrySky extends Module {
             }
             double vx = dy * uz - dz * uy, vy = dz * ux - dx * uz, vz = dx * uy - dy * ux;
 
-            double twistAngle = twist ? 0.7 * Math.sin(t * c.speed * 0.8 + c.phase) : 0;
-            double inner = Math.tan(rad * 0.5), outer = Math.tan(rad);
+            double twistAngle = twist ? 0.8 * Math.sin(tm * c.speed * 0.8 + c.phase) : 0;
 
-            for (int i = 0; i <= RING; i++) {
-                double ang = (i % RING) * (Math.PI * 2 / RING);
-                double ai = ang, ao = ang + twistAngle;
-
-                // points on the sphere around the cloud center
-                sphere(ringA, i, dx + (ux * Math.cos(ai) + vx * Math.sin(ai)) * inner, dy + (uy * Math.cos(ai) + vy * Math.sin(ai)) * inner,
-                    dz + (uz * Math.cos(ai) + vz * Math.sin(ai)) * inner, cx, cy, cz, radius);
-                sphere(ringB, i, dx + (ux * Math.cos(ao) + vx * Math.sin(ao)) * outer, dy + (uy * Math.cos(ao) + vy * Math.sin(ao)) * outer,
-                    dz + (uz * Math.cos(ao) + vz * Math.sin(ao)) * outer, cx, cy, cz, radius);
+            for (int ri = 0; ri < 3; ri++) {
+                double rr = Math.tan(rad * ringScale[ri]);
+                double tw = twistAngle * ri / 2.0;
+                for (int i = 0; i <= RING; i++) {
+                    double ang = (i % RING) * (Math.PI * 2 / RING) + tw;
+                    // a slightly uneven edge keeps the puff from looking like a perfect disc
+                    double wob = 1 + 0.18 * Math.sin(ang * 3 + c.phase + tm * c.speed);
+                    double ca = Math.cos(ang) * rr * wob, sa = Math.sin(ang) * rr * wob;
+                    sphere(ring[ri], i, dx + ux * ca + vx * sa, dy + uy * ca + vy * sa, dz + uz * ca + vz * sa, cx, cy, cz, radius);
+                }
             }
 
             double mx = cx + dx * radius, my = cy + dy * radius, mz = cz + dz * radius;
-            c1.set(col.r, col.g, col.b, (int) (255 * Math.min(1, a0)));          // middle
-            c2.set(col.r, col.g, col.b, (int) (255 * Math.min(1, a0 * 0.55)));   // inner ring
-            c3.set(col.r, col.g, col.b, 0);                                      // clear outer edge
+            c1.set(col.r, col.g, col.b, (int) (255 * Math.min(1, a0)));
+            Color[] rc = {c2, c3, c4};
+            for (int ri = 0; ri < 3; ri++) rc[ri].set(col.r, col.g, col.b, (int) (255 * Math.min(1, a0 * ringAlpha[ri])));
 
             for (int i = 0; i < RING; i++) {
                 int j = i + 1;
-                // middle -> inner ring (a triangle drawn as a flat quad)
-                quad(r, mx, my, mz, mx, my, mz, ringA[j * 3], ringA[j * 3 + 1], ringA[j * 3 + 2], ringA[i * 3], ringA[i * 3 + 1], ringA[i * 3 + 2], c1, c1, c2, c2);
-                // inner ring -> clear edge
-                quad(r, ringA[i * 3], ringA[i * 3 + 1], ringA[i * 3 + 2], ringA[j * 3], ringA[j * 3 + 1], ringA[j * 3 + 2],
-                    ringB[j * 3], ringB[j * 3 + 1], ringB[j * 3 + 2], ringB[i * 3], ringB[i * 3 + 1], ringB[i * 3 + 2], c2, c2, c3, c3);
+                double[] A = ring[0];
+                quad(r, mx, my, mz, mx, my, mz, A[j * 3], A[j * 3 + 1], A[j * 3 + 2], A[i * 3], A[i * 3 + 1], A[i * 3 + 2], c1, c1, c2, c2);
+                for (int ri = 0; ri < 2; ri++) {
+                    double[] P = ring[ri], Q = ring[ri + 1];
+                    Color from = rc[ri], to = rc[ri + 1];
+                    quad(r, P[i * 3], P[i * 3 + 1], P[i * 3 + 2], P[j * 3], P[j * 3 + 1], P[j * 3 + 2],
+                        Q[j * 3], Q[j * 3 + 1], Q[j * 3 + 2], Q[i * 3], Q[i * 3 + 1], Q[i * 3 + 2], from, from, to, to);
+                }
             }
         }
     }
@@ -537,17 +593,17 @@ public class StarrySky extends Module {
     private void drawMeteors(Renderer3D r, double dt, double cx, double cy, double cz, double radius) {
         // spawn
         nextMeteor -= dt;
-        if (nextMeteor <= 0 && meteors.size() < 4) {
+        if (nextMeteor <= 0 && meteors.size() < 6) {
             Meteor m = new Meteor();
             double minEl = Math.max(Math.toRadians(minElevation.get()), Math.toRadians(20));
-            double el = minEl + random.nextDouble() * (Math.toRadians(70) - minEl);
+            double el = minEl + random.nextDouble() * (Math.toRadians(80) - minEl);
             double az = random.nextDouble() * Math.PI * 2;
             m.x = Math.cos(el) * Math.cos(az);
             m.y = Math.sin(el);
             m.z = Math.cos(el) * Math.sin(az);
 
-            // a direction on the sphere perpendicular to the start, pointing mostly downwards like a falling star
-            double ang = Math.toRadians(200 + random.nextDouble() * 140);
+            // a random direction along the sky, perpendicular to the start point
+            double ang = random.nextDouble() * Math.PI * 2; // any direction
             double ux = -m.z, uz = m.x, ul = Math.sqrt(ux * ux + uz * uz);
             ux /= ul; uz /= ul;
             double vx = m.y * uz, vy = m.z * ux - m.x * uz, vz = -m.y * ux;
@@ -557,7 +613,7 @@ public class StarrySky extends Module {
             double tl = Math.sqrt(m.tx * m.tx + m.ty * m.ty + m.tz * m.tz);
             m.tx /= tl; m.ty /= tl; m.tz /= tl;
 
-            m.speed = 0.55 + random.nextDouble() * 0.5;
+            m.speed = 0.4 + random.nextDouble() * 0.7;
             m.life = 0.9 + random.nextDouble() * 0.7;
             m.width = 0.0035 + random.nextDouble() * 0.002;
             meteors.add(m);
