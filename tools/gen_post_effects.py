@@ -31,3 +31,27 @@ for s in range(13):          # saturation 0.00 .. 3.00 step 0.25
             }
             with open(os.path.join(out, "grade_%02d_%d_%d.json" % (s, c, b)), "w") as f:
                 json.dump(effect, f, indent=2)
+
+# Saturation module: one effect per 0.1 step, 0.0 .. 3.0
+for lvl in range(31):
+    effect = {
+        "targets": {"swap": {}},
+        "passes": [
+            {
+                "vertex_shader": "minecraft:core/screenquad",
+                "fragment_shader": "blockoutlines:post/saturation",
+                "inputs": [{"sampler_name": "In", "target": "minecraft:main"}],
+                "output": "swap",
+                "uniforms": {"SaturationConfig": [{"name": "Params", "type": "vec4", "value": [lvl / 10.0, 0.0, 0.0, 0.0]}]},
+            },
+            {
+                "vertex_shader": "minecraft:core/screenquad",
+                "fragment_shader": "minecraft:post/blit",
+                "inputs": [{"sampler_name": "In", "target": "swap"}],
+                "output": "minecraft:main",
+                "uniforms": {"BlitConfig": [{"name": "ColorModulate", "type": "vec4", "value": [1.0, 1.0, 1.0, 1.0]}]},
+            },
+        ],
+    }
+    with open(os.path.join(out, "saturation_%02d.json" % lvl), "w") as f:
+        json.dump(effect, f, indent=2)

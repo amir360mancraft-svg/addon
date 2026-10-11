@@ -8,7 +8,9 @@
     "InGameHudMixin",
     "BipedEntityRendererMixin",
     "ItemModelManagerMixin",
-    "ItemStackMixin"
+    "ItemStackMixin",
+    "StarrySkyRenderingMixin",
+    "StarrySkyFogMixin"
   ],
   "injectors": {
     "defaultRequire": 1
