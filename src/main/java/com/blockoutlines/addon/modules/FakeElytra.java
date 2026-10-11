@@ -9,6 +9,7 @@ import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.settings.StringSetting;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.orbit.EventHandler;
+import net.minecraft.component.ComponentType;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.ItemEntity;
@@ -20,8 +21,11 @@ import net.minecraft.screen.slot.Slot;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -74,6 +78,13 @@ public class FakeElytra extends Module {
         .description("Text shown after the $ sign, for example 374M.")
         .defaultValue("374M")
         .visible(fakeWorth::get)
+        .build()
+    );
+
+    private final Setting<Boolean> ignoreServerData = sgGeneral.add(new BoolSetting.Builder()
+        .name("ignore-server-data")
+        .description("Servers often change the lore, custom data or repair cost of an item depending on where it is (inventory, cursor, item frame, ground). Ignore those when deciding if two stacks are the same item. Turn it off only if two different items get mixed up.")
+        .defaultValue(true)
         .build()
     );
 
@@ -166,8 +177,47 @@ public class FakeElytra extends Module {
 
     private boolean matches(ItemStack st) {
         ItemStack fp = fingerprint;
-        return fp != null && st != null && !st.isEmpty() && st.getItem() == fp.getItem()
-            && ItemStack.areItemsAndComponentsEqual(normalize(st), fp);
+        return fp != null && st != null && !st.isEmpty() && same(st, fp);
+    }
+
+    private final Map<ComponentType<?>, String> typeNames = new HashMap<>();
+    private String lastDiff = "";
+    private int lastDiffTick = -1000;
+
+    /** Data a server may change by itself, so it must not decide whether two stacks are the same item. */
+    private boolean ignoredType(ComponentType<?> t) {
+        String name = typeNames.computeIfAbsent(t, String::valueOf);
+        if (name.equals("minecraft:damage")) return true; // wearing the item down must not break the match
+        if (!ignoreServerData.get()) return false;
+        return name.equals("minecraft:lore") || name.equals("minecraft:custom_data") || name.equals("minecraft:repair_cost")
+            || name.equals("minecraft:rarity");
+    }
+
+    /** Same item type and the same data, apart from the things a server changes or that do not matter (count, damage, lore...). */
+    private boolean same(ItemStack a, ItemStack b) {
+        if (a == null || b == null || a.getItem() != b.getItem()) return false;
+
+        Set<ComponentType<?>> types = new HashSet<>(a.getComponents().getTypes());
+        types.addAll(b.getComponents().getTypes());
+
+        StringBuilder bad = null;
+        for (ComponentType<?> t : types) {
+            if (ignoredType(t)) continue;
+            if (Objects.equals(a.get(t), b.get(t))) continue;
+            if (!debug.get()) return false;
+            if (bad == null) bad = new StringBuilder();
+            bad.append(typeNames.get(t)).append(' ');
+        }
+        if (bad == null) return true;
+
+        // debug: tell which data made two stacks of the same item look different (for example on a server)
+        String text = bad.toString().trim();
+        if (!text.equals(lastDiff) && tickCount - lastDiffTick >= 20) {
+            info("elytra: same item, but this data differs: " + text);
+            lastDiff = text;
+            lastDiffTick = tickCount;
+        }
+        return false;
     }
 
     private static int firstNew(List<Integer> now, List<Integer> before) {
@@ -345,23 +395,23 @@ public class FakeElytra extends Module {
 
         ItemStack fp = fingerprint;
         if (fp == null || stack.getItem() != fp.getItem()) return false; // cheap check first
-        if (!ItemStack.areItemsAndComponentsEqual(normalize(stack), fp)) return false;
+        if (!same(stack, fp)) return false;
 
         switch (where) {
             case SLOT:
                 return slot >= 0 && slot < mc.player.getInventory().size() && stack == mc.player.getInventory().getStack(slot);
             case CURSOR: {
                 ItemStack c = mc.player.currentScreenHandler.getCursorStack();
-                return stack == c || (ItemStack.areItemsAndComponentsEqual(stack, c) && !inAnySlot(stack));
+                return stack == c || (same(stack, c) && !inAnySlot(stack));
             }
             default:
                 if (dropId >= 0) {
                     return mc.world != null && mc.world.getEntityById(dropId) instanceof ItemEntity d
-                        && (stack == d.getStack() || (ItemStack.areItemsAndComponentsEqual(stack, d.getStack()) && !inAnySlot(stack)));
+                        && (stack == d.getStack() || (same(stack, d.getStack()) && !inAnySlot(stack)));
                 }
                 if (frameId >= 0) {
                     return mc.world != null && mc.world.getEntityById(frameId) instanceof ItemFrameEntity f
-                        && (stack == f.getHeldItemStack() || (ItemStack.areItemsAndComponentsEqual(stack, f.getHeldItemStack()) && !inAnySlot(stack)));
+                        && (stack == f.getHeldItemStack() || (same(stack, f.getHeldItemStack()) && !inAnySlot(stack)));
                 }
                 if (containerIdx >= 0) {
                     ScreenHandler h = mc.player.currentScreenHandler;
