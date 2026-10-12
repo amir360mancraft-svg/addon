@@ -3,6 +3,8 @@ package com.blockoutlines.addon.util;
 import meteordevelopment.meteorclient.utils.render.color.Color;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.network.AbstractClientPlayerEntity;
+import net.minecraft.util.math.MathHelper;
+import net.minecraft.util.math.Vec3d;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -52,6 +54,42 @@ public final class CosmeticUtil {
     public static Color lerp(Color a, Color b, double t, int alpha) {
         t = Math.max(0, Math.min(1, t));
         return new Color((int) (a.r + (b.r - a.r) * t), (int) (a.g + (b.g - a.g) * t), (int) (a.b + (b.b - a.b) * t), alpha);
+    }
+
+    /** Where the player's body is: origin, "up" along the spine, "back" out of the back, and "right". */
+    public record Frame(Vec3d origin, Vec3d up, Vec3d back, Vec3d right, boolean leaning) {}
+
+    /**
+     * The body frame like vanilla renders it. Standing it is just up/back/right. While gliding with an elytra or
+     * swimming/crawling the whole body is tilted forward around the feet, so things attached to the head or back
+     * must follow that tilt or they float away from the player.
+     */
+    public static Frame frame(AbstractClientPlayerEntity p, float tickDelta) {
+        Vec3d pos = p.getLerpedPos(tickDelta);
+        double yaw = Math.toRadians(MathHelper.lerpAngleDegrees(tickDelta, p.lastBodyYaw, p.bodyYaw));
+        Vec3d back = new Vec3d(Math.sin(yaw), 0, -Math.cos(yaw));
+        Vec3d right = new Vec3d(-Math.cos(yaw), 0, -Math.sin(yaw));
+        Vec3d up = new Vec3d(0, 1, 0);
+        double pitch = p.getPitch(tickDelta);
+
+        double thetaDeg = 0, swimK = 0;
+        if (p.isGliding()) {
+            double j = p.getGlidingTicks() + tickDelta;
+            double k = MathHelper.clamp(j * j / 100.0, 0, 1);
+            thetaDeg = k * (-90 - pitch);
+        } else if (p.isInSwimmingPose()) {
+            swimK = p.getLeaningPitch(tickDelta);
+            thetaDeg = swimK * (p.isTouchingWater() ? -90 - pitch : -90);
+        }
+        if (Math.abs(thetaDeg) < 0.01) return new Frame(pos, up, back, right, false);
+
+        double th = Math.toRadians(thetaDeg);
+        double c = Math.cos(th), sn = Math.sin(th);
+        Vec3d upR = up.multiply(c).add(back.multiply(sn));
+        Vec3d backR = up.multiply(-sn).add(back.multiply(c));
+        Vec3d origin = pos;
+        if (swimK > 0) origin = pos.add(upR.multiply(-1).add(backR.multiply(0.3)).multiply(swimK));
+        return new Frame(origin, upR, backR, right, true);
     }
 
     private CosmeticUtil() {}

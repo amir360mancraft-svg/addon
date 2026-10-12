@@ -106,6 +106,16 @@ public class ChinaHat extends Module {
 
         Vec3d head = pos.add(0, p.getStandingEyeHeight(), 0);
         Vec3d base = head.add(up.multiply(0.33));
+
+        // gliding / swimming: the body is tilted, so put the hat on the tilted head
+        CosmeticUtil.Frame f = CosmeticUtil.frame(p, tickDelta);
+        if (f.leaning()) {
+            Vec3d crown = f.up().multiply(0.707).add(f.back().multiply(0.707)).normalize();
+            up = crown;
+            e1 = f.right();
+            e2 = up.crossProduct(e1).normalize();
+            base = f.origin().add(f.up().multiply(1.5)).add(crown.multiply(0.45));
+        }
         Vec3d apex = base.add(up.multiply(height.get() + 0.05));
         double r = brim.get();
 

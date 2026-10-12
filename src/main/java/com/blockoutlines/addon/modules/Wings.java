@@ -104,13 +104,13 @@ public class Wings extends Module {
         phase.put(id, ph);
         double o = MathHelper.clamp(cur + amp * Math.sin(ph), 0, 1);
 
-        Vec3d pos = p.getLerpedPos(tickDelta);
-        double yaw = Math.toRadians(MathHelper.lerpAngleDegrees(tickDelta, p.lastBodyYaw, p.bodyYaw));
-        Vec3d fwd = new Vec3d(-Math.sin(yaw), 0, Math.cos(yaw));
-        Vec3d right = new Vec3d(-Math.cos(yaw), 0, -Math.sin(yaw));
-        Vec3d back = fwd.multiply(-1);
-        Vec3d up = new Vec3d(0, 1, 0);
-        Vec3d pivot = pos.add(0, sneaking ? 1.12 : 1.38, 0).add(back.multiply(sneaking ? 0.02 : 0.14));
+        CosmeticUtil.Frame f = CosmeticUtil.frame(p, tickDelta);
+        Vec3d right = f.right();
+        Vec3d back = f.back();
+        Vec3d up = f.up();
+        double h = f.leaning() ? 1.38 : (sneaking ? 1.12 : 1.38);
+        double d = f.leaning() ? 0.14 : (sneaking ? 0.02 : 0.14);
+        Vec3d pivot = f.origin().add(up.multiply(h)).add(back.multiply(d));
 
         Color root, tip, edge = null;
         int alpha = 235;

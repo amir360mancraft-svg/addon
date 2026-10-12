@@ -1,5 +1,6 @@
 package com.blockoutlines.addon;
 
+import com.blockoutlines.addon.modules.AmethystFinder;
 import com.blockoutlines.addon.modules.AnimatedSky;
 import com.blockoutlines.addon.modules.BlockOutlines;
 import com.blockoutlines.addon.modules.ChinaHat;
@@ -44,6 +45,7 @@ public class BlockOutlinesAddon extends MeteorAddon {
         Modules.get().add(new PlayerSigns());
         Modules.get().add(new OgChunkFinder());
         Modules.get().add(new LightChunkFinder());
+        Modules.get().add(new AmethystFinder());
         Modules.get().add(new Saturation());
         Modules.get().add(new StarrySky());
         Modules.get().add(new Wings());
