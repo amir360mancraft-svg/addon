@@ -240,7 +240,7 @@ public class NetheriteFinder extends Module {
     private final Color tracer = new Color();
 
     public NetheriteFinder() {
-        super(BlockOutlinesAddon.HUNTING, "netherite-finder", "Seed based ancient debris finder: works out where debris generated, then shows what is still unmined (works against anti-xray).");
+        super(BlockOutlinesAddon.HUNTING, "seed-netherite-finder", "Seed based ancient debris finder: works out where debris generated, then shows what is still unmined (works against anti-xray).");
     }
 
     @Override
