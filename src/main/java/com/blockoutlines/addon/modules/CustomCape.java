@@ -7,7 +7,6 @@ import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
 import meteordevelopment.meteorclient.gui.widgets.containers.WVerticalList;
 import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
-import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.EnumSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
@@ -62,9 +61,6 @@ public class CustomCape extends Module {
     private final Setting<Style> style = sg.add(new EnumSetting.Builder<Style>()
         .name("style").description("Pattern of the preset cape and elytra.")
         .defaultValue(Style.Gradient).visible(() -> source.get() == Source.Preset).build());
-    private final Setting<Boolean> elytra = sg.add(new BoolSetting.Builder()
-        .name("elytra").description("Also use this texture for your elytra.")
-        .defaultValue(true).build());
 
     private boolean ready;
     private NativeImageBackedTexture texture;
@@ -106,7 +102,7 @@ public class CustomCape extends Module {
             return original.withOverride(SkinTextures.SkinOverride.create(
                 Optional.empty(),
                 Optional.of(new AssetInfo.TextureAssetInfo(ID)),
-                elytra.get() ? Optional.of(new AssetInfo.TextureAssetInfo(ID)) : Optional.empty(),
+                Optional.of(new AssetInfo.TextureAssetInfo(ID)),
                 Optional.empty()));
         } catch (Throwable t) {
             return original;
