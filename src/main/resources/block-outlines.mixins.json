@@ -4,6 +4,7 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "BlockRenderManagerMixin",
+    "FluidRendererMixin",
     "GameRendererInvoker",
     "InGameHudMixin",
     "BipedEntityRendererMixin",
