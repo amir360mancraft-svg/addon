@@ -85,7 +85,7 @@ public class RegionMap extends Module {
     private double grabX, grabY;
 
     public RegionMap() {
-        super(BlockOutlinesAddon.HUNTING, "region-map", "Map of the DonutSMP regions (EU / NA / Asia / Oceania) with your position.");
+        super(BlockOutlinesAddon.HUNTING, "better-region-map", "Map of the DonutSMP regions (EU / NA / Asia / Oceania) with your position.");
     }
 
     @Override
@@ -125,7 +125,7 @@ public class RegionMap extends Module {
         int idx = inside ? row * GRID + col : -1;
 
         // header
-        text(ctx, "REGION MAP", x + pad, y + pad + px(1, s), GREEN, s * 0.85f);
+        text(ctx, "BETTER REGION MAP", x + pad, y + pad + px(1, s), GREEN, s * 0.85f);
         String name = inside ? NAMES[TYPE[idx]] : "Outside the map";
         text(ctx, name, x + pad, y + pad + px(14, s), TITLE, s * 1.15f);
         if (showCoords.get()) {
