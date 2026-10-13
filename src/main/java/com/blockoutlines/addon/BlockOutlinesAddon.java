@@ -2,6 +2,7 @@ package com.blockoutlines.addon;
 
 import com.blockoutlines.addon.modules.AmethystFinder;
 import com.blockoutlines.addon.modules.AnimatedSky;
+import com.blockoutlines.addon.modules.BaseFinder;
 import com.blockoutlines.addon.modules.BlockOutlines;
 import com.blockoutlines.addon.modules.ChinaHat;
 import com.blockoutlines.addon.modules.ColorGrading;
@@ -9,8 +10,8 @@ import com.blockoutlines.addon.modules.CustomCrosshair;
 import com.blockoutlines.addon.modules.FakeElytra;
 import com.blockoutlines.addon.modules.LightChunkFinder;
 import com.blockoutlines.addon.modules.NetheriteFinder;
-import com.blockoutlines.addon.modules.NoWater;
 import com.blockoutlines.addon.modules.OgChunkFinder;
+import com.blockoutlines.addon.modules.CustomCape;
 import com.blockoutlines.addon.modules.JumpCircle;
 import com.blockoutlines.addon.modules.Pets;
 import com.blockoutlines.addon.modules.RegionMap;
@@ -52,7 +53,6 @@ public class BlockOutlinesAddon extends MeteorAddon {
         Modules.get().add(new AmethystFinder());
         Modules.get().add(new NetheriteFinder());
         Modules.get().add(new Saturation());
-        Modules.get().add(new NoWater());
         Modules.get().add(new StarrySky());
         Modules.get().add(new Wings());
         Modules.get().add(new ChinaHat());
@@ -60,6 +60,8 @@ public class BlockOutlinesAddon extends MeteorAddon {
         Modules.get().add(new Pets());
         Modules.get().add(new RegionMap());
         Modules.get().add(new JumpCircle());
+        Modules.get().add(new CustomCape());
+        Modules.get().add(new BaseFinder());
         LOG.info("Better Render loaded");
     }
 

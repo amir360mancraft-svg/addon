@@ -4,14 +4,14 @@
   "compatibilityLevel": "JAVA_21",
   "client": [
     "BlockRenderManagerMixin",
-    "FluidRendererMixin",
     "GameRendererInvoker",
     "InGameHudMixin",
     "BipedEntityRendererMixin",
     "ItemModelManagerMixin",
     "ItemStackMixin",
     "StarrySkyRenderingMixin",
-    "StarrySkyFogMixin"
+    "StarrySkyFogMixin",
+    "PlayerListEntryMixin"
   ],
   "injectors": {
     "defaultRequire": 1
