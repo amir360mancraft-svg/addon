@@ -51,18 +51,27 @@ public class Pets extends Module {
         PetBee(EntityType<? extends BeeEntity> type, World world) { super(type, world); }
         @Override public boolean canHit() { return false; }
         @Override public boolean isPushable() { return false; }
+        // Client-only entities must never move YOU: the server knows nothing about them, so a push would look like a movement hack.
+        @Override protected void tickCramming() {}
+        @Override public void pushAwayFrom(Entity entity) {}
     }
 
     private static final class PetTurtle extends TurtleEntity {
         PetTurtle(EntityType<? extends TurtleEntity> type, World world) { super(type, world); }
         @Override public boolean canHit() { return false; }
         @Override public boolean isPushable() { return false; }
+        // Client-only entities must never move YOU: the server knows nothing about them, so a push would look like a movement hack.
+        @Override protected void tickCramming() {}
+        @Override public void pushAwayFrom(Entity entity) {}
     }
 
     private static final class PetAllay extends AllayEntity {
         PetAllay(EntityType<? extends AllayEntity> type, World world) { super(type, world); }
         @Override public boolean canHit() { return false; }
         @Override public boolean isPushable() { return false; }
+        // Client-only entities must never move YOU: the server knows nothing about them, so a push would look like a movement hack.
+        @Override protected void tickCramming() {}
+        @Override public void pushAwayFrom(Entity entity) {}
     }
 
     private final SettingGroup sg = settings.getDefaultGroup();
