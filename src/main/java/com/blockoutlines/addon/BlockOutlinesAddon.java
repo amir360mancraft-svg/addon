@@ -9,6 +9,7 @@ import com.blockoutlines.addon.modules.CustomCrosshair;
 import com.blockoutlines.addon.modules.FakeElytra;
 import com.blockoutlines.addon.modules.LightChunkFinder;
 import com.blockoutlines.addon.modules.NetheriteFinder;
+import com.blockoutlines.addon.modules.NoWater;
 import com.blockoutlines.addon.modules.OgChunkFinder;
 import com.blockoutlines.addon.modules.JumpCircle;
 import com.blockoutlines.addon.modules.Pets;
@@ -51,6 +52,7 @@ public class BlockOutlinesAddon extends MeteorAddon {
         Modules.get().add(new AmethystFinder());
         Modules.get().add(new NetheriteFinder());
         Modules.get().add(new Saturation());
+        Modules.get().add(new NoWater());
         Modules.get().add(new StarrySky());
         Modules.get().add(new Wings());
         Modules.get().add(new ChinaHat());
