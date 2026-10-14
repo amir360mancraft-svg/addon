@@ -42,7 +42,7 @@ public abstract class ItemStackMixin {
     private void blockoutlines$allGlint(CallbackInfoReturnable<Boolean> cir) {
         if (cir.getReturnValue()) return;
         com.blockoutlines.addon.modules.CustomGlint glint = Modules.get() != null ? Modules.get().get(com.blockoutlines.addon.modules.CustomGlint.class) : null;
-        if (glint != null && glint.isActive() && glint.allItems.get() && !((ItemStack) (Object) this).isEmpty()) cir.setReturnValue(true);
+        if (glint != null && glint.isActive() && glint.allItems.get() && (com.blockoutlines.addon.modules.CustomGlint.handActive || glint.everywhere()) && !((ItemStack) (Object) this).isEmpty()) cir.setReturnValue(true);
     }
 
     @Inject(method = "getTooltip", at = @At("RETURN"), cancellable = true, require = 1)

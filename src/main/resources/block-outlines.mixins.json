@@ -12,7 +12,9 @@
     "StarrySkyRenderingMixin",
     "StarrySkyFogMixin",
     "PlayerListEntryMixin",
-    "AbstractTextureAccessor"
+    "AbstractTextureAccessor",
+    "TextureManagerAccessor",
+    "GameRendererHandMixin"
   ],
   "injectors": {
     "defaultRequire": 1

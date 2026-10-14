@@ -2,11 +2,13 @@ package com.blockoutlines.addon.modules;
 
 import com.blockoutlines.addon.BlockOutlinesAddon;
 import com.blockoutlines.addon.mixin.AbstractTextureAccessor;
+import com.blockoutlines.addon.mixin.TextureManagerAccessor;
 import com.blockoutlines.addon.util.CosmeticUtil;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.ColorSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
+import meteordevelopment.meteorclient.settings.EnumSetting;
 import meteordevelopment.meteorclient.settings.IntSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
@@ -20,6 +22,7 @@ import net.minecraft.client.texture.NativeImage;
 import net.minecraft.client.texture.NativeImageBackedTexture;
 import net.minecraft.util.Identifier;
 
+import java.util.Map;
 import java.util.Random;
 
 /**
@@ -28,21 +31,30 @@ import java.util.Random;
  * a few times per second, so nothing has to be added to a resource pack.
  */
 public class CustomGlint extends Module {
+    public enum Where { HandOnly, Everywhere }
+
+    /** True while the first-person hand is being drawn (set by a mixin around GameRenderer.renderHand). */
+    public static boolean handActive;
+
     // the ids vanilla itself uses (item glint = hand / inventory, entity glint = armor and mobs)
     private static final Identifier ITEM_GLINT = ItemRenderer.ITEM_ENCHANTMENT_GLINT;
     private static final Identifier ARMOR_GLINT = ItemRenderer.ENTITY_ENCHANTMENT_GLINT;
     private static final int N = 128;
 
     private final SettingGroup sg = settings.getDefaultGroup();
+    private final SettingGroup sgBase = settings.createGroup("Base layer");
     private final SettingGroup sgBolt = settings.createGroup("Lightning");
     private final SettingGroup sgRay = settings.createGroup("Rays");
 
+    private final Setting<Where> where = sg.add(new EnumSetting.Builder<Where>()
+        .name("where").description("HandOnly: only the item in your hand (first person). Everywhere: also inventory, hotbar, armor.")
+        .defaultValue(Where.HandOnly).build());
     private final Setting<SettingColor> coreColor = sg.add(new ColorSetting.Builder()
         .name("core-color").description("Colour of the bright centre of bolts and rays.")
-        .defaultValue(new SettingColor(190, 235, 255, 255)).build());
+        .defaultValue(new SettingColor(255, 255, 255, 255)).build());
     private final Setting<SettingColor> glowColor = sg.add(new ColorSetting.Builder()
         .name("glow-color").description("Colour of the glow around bolts and of the background.")
-        .defaultValue(new SettingColor(40, 110, 255, 255)).build());
+        .defaultValue(new SettingColor(170, 210, 255, 255)).build());
     private final Setting<Boolean> rainbow = sg.add(new BoolSetting.Builder()
         .name("rainbow").description("Cycle through all colours instead of using the two colours.")
         .defaultValue(false).build());
@@ -51,17 +63,29 @@ public class CustomGlint extends Module {
         .defaultValue(130).range(20, 400).sliderRange(20, 300).build());
     private final Setting<Integer> background = sg.add(new IntSetting.Builder()
         .name("background-glow").description("Soft moving glow behind the bolts (0 = only the bolts).")
-        .defaultValue(25).range(0, 100).sliderRange(0, 100).build());
+        .defaultValue(0).range(0, 100).sliderRange(0, 100).build());
     private final Setting<Integer> fps = sg.add(new IntSetting.Builder()
         .name("animation-fps").description("How many times per second the glint is redrawn (lower = lighter on the PC).")
         .defaultValue(30).range(5, 60).sliderRange(5, 60).build());
     private final Setting<Boolean> armor = sg.add(new BoolSetting.Builder()
-        .name("armor-glint").description("Use the same glint on enchanted armor.")
+        .name("armor-glint").description("Use the same glint on enchanted armor (only in Everywhere mode).")
         .defaultValue(true).build());
     public final Setting<Boolean> allItems = sg.add(new BoolSetting.Builder()
-        .name("all-items").description("Make every item glint, not only enchanted ones.")
-        .defaultValue(false).build());
+        .name("all-items").description("Every item gets the effect, not only enchanted ones (in HandOnly mode: every item you hold).")
+        .defaultValue(true).build());
 
+    private final Setting<Boolean> baseOn = sgBase.add(new BoolSetting.Builder()
+        .name("base-layer").description("A steady coloured layer over the whole item (like the blue items in the video); the bolts move on top of it.")
+        .defaultValue(true).build());
+    private final Setting<SettingColor> baseColor = sgBase.add(new ColorSetting.Builder()
+        .name("base-color").description("Colour of the layer.")
+        .defaultValue(new SettingColor(0, 100, 255, 255)).visible(baseOn::get).build());
+    private final Setting<Integer> baseStrength = sgBase.add(new IntSetting.Builder()
+        .name("base-strength").description("How strong the layer is, in percent.")
+        .defaultValue(55).range(0, 200).sliderRange(0, 150).visible(baseOn::get).build());
+    private final Setting<Integer> basePulse = sgBase.add(new IntSetting.Builder()
+        .name("base-pulse").description("How much the layer breathes (brighter / darker), in percent. 0 = steady.")
+        .defaultValue(15).range(0, 100).sliderRange(0, 60).visible(baseOn::get).build());
     private final Setting<Integer> boltRate = sgBolt.add(new IntSetting.Builder()
         .name("bolts-per-second").description("How many lightning bolts flash every second.")
         .defaultValue(14).range(0, 80).sliderRange(0, 60).build());
@@ -98,7 +122,8 @@ public class CustomGlint extends Module {
     private NativeImage itemImg, armorImg;
     private long lastStep;
     private double spawnCarryBolt, spawnCarryRay;
-    private boolean armorApplied;
+    private boolean armorApplied, installedEverywhere, samplerDone;
+    private AbstractTexture saved;
 
     public CustomGlint() {
         super(BlockOutlinesAddon.COSMETICS, "custom-glint", "Animated lightning / ray enchantment glint with your own colours.");
@@ -115,8 +140,11 @@ public class CustomGlint extends Module {
         install();
     }
 
+    public boolean everywhere() { return where.get() == Where.Everywhere; }
+
     @Override
     public void onDeactivate() {
+        handEnd();
         restore();
     }
 
@@ -124,23 +152,56 @@ public class CustomGlint extends Module {
 
     private void install() {
         try {
-            AbstractTexture vanillaItem = mc.getTextureManager().getTexture(ITEM_GLINT);
+            samplerDone = false;
+            installedEverywhere = everywhere();
             itemImg = new NativeImage(N, N, true);
             itemTex = new NativeImageBackedTexture(() -> "blockoutlines-glint-item", itemImg);
-            copySampler(vanillaItem, itemTex);
-            mc.getTextureManager().registerTexture(ITEM_GLINT, itemTex);
+            if (installedEverywhere) {
+                copySampler(mc.getTextureManager().getTexture(ITEM_GLINT), itemTex);
+                mc.getTextureManager().registerTexture(ITEM_GLINT, itemTex);
 
-            if (armor.get()) {
-                AbstractTexture vanillaArmor = mc.getTextureManager().getTexture(ARMOR_GLINT);
-                armorImg = new NativeImage(N, N, true);
-                armorTex = new NativeImageBackedTexture(() -> "blockoutlines-glint-armor", armorImg);
-                copySampler(vanillaArmor, armorTex);
-                mc.getTextureManager().registerTexture(ARMOR_GLINT, armorTex);
-                armorApplied = true;
+                if (armor.get()) {
+                    armorImg = new NativeImage(N, N, true);
+                    armorTex = new NativeImageBackedTexture(() -> "blockoutlines-glint-armor", armorImg);
+                    copySampler(mc.getTextureManager().getTexture(ARMOR_GLINT), armorTex);
+                    mc.getTextureManager().registerTexture(ARMOR_GLINT, armorTex);
+                    armorApplied = true;
+                }
             }
         } catch (Throwable t) {
             error("Could not create the glint texture: " + t.getMessage());
         }
+    }
+
+    /** Called right before the first-person hand is drawn: our glint is put in place of the vanilla one. */
+    public void handBegin() {
+        if (itemTex == null || installedEverywhere) return;
+        try {
+            Map<Identifier, AbstractTexture> map = ((TextureManagerAccessor) mc.getTextureManager()).blockoutlines$textures();
+            AbstractTexture cur = mc.getTextureManager().getTexture(ITEM_GLINT);
+            if (cur != itemTex) {
+                saved = cur;
+                if (!samplerDone && cur != null) {
+                    copySampler(cur, itemTex);
+                    samplerDone = true;
+                }
+                map.put(ITEM_GLINT, itemTex);
+            }
+            handActive = true;
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** Called right after the hand: the vanilla glint goes back, so inventory, hotbar and the world keep theirs. */
+    public void handEnd() {
+        handActive = false;
+        if (installedEverywhere || saved == null) return;
+        try {
+            Map<Identifier, AbstractTexture> map = ((TextureManagerAccessor) mc.getTextureManager()).blockoutlines$textures();
+            if (map.get(ITEM_GLINT) == itemTex || itemTex == null) map.put(ITEM_GLINT, saved);
+        } catch (Throwable ignored) {
+        }
+        saved = null;
     }
 
     /** The vanilla glint texture repeats; ours must repeat the same way, so it borrows the vanilla sampler. */
@@ -153,8 +214,12 @@ public class CustomGlint extends Module {
 
     private void restore() {
         try {
-            if (itemTex != null) mc.getTextureManager().registerTexture(ITEM_GLINT);
+            if (itemTex != null && installedEverywhere) mc.getTextureManager().registerTexture(ITEM_GLINT);
             if (armorApplied) mc.getTextureManager().registerTexture(ARMOR_GLINT);
+        } catch (Throwable ignored) {
+        }
+        try {
+            if (itemTex != null && !installedEverywhere) itemTex.close();
         } catch (Throwable ignored) {
         }
         itemTex = null;
@@ -176,8 +241,10 @@ public class CustomGlint extends Module {
         lastStep = now;
 
         // resource reload (F3+T) or armor toggled: put our textures back
-        if (itemTex == null || mc.getTextureManager().getTexture(ITEM_GLINT) != itemTex
-            || armor.get() != armorApplied) {
+        boolean every = everywhere();
+        if (itemTex == null || every != installedEverywhere
+            || (every && (mc.getTextureManager().getTexture(ITEM_GLINT) != itemTex || armor.get() != armorApplied))) {
+            handEnd();
             restore();
             install();
             if (itemTex == null) return;
@@ -267,6 +334,12 @@ public class CustomGlint extends Module {
         double t = System.currentTimeMillis() / 1000.0;
         Color glow = glowColor.get();
         float gr = glow.r / 255f, gg = glow.g / 255f, gb = glow.b / 255f;
+        float baseR = 0f, baseG = 0f, baseB = 0f;
+        if (baseOn.get()) {
+            Color bc = baseColor.get();
+            float k = baseStrength.get() / 100.0f * (1.0f + basePulse.get() / 100.0f * (float) Math.sin(t * 2.2));
+            baseR = bc.r / 255f * k; baseG = bc.g / 255f * k; baseB = bc.b / 255f * k;
+        }
         for (int y = 0; y < N; y++) {
             for (int x = 0; x < N; x++) {
                 int i = y * N + x;
@@ -284,6 +357,7 @@ public class CustomGlint extends Module {
                 } else {
                     rr = r[i] + base * gr; g2 = g[i] + base * gg; bb2 = b[i] + base * gb;
                 }
+                rr += baseR; g2 += baseG; bb2 += baseB;
                 int ri = clamp(rr * gain), gi = clamp(g2 * gain), bi = clamp(bb2 * gain);
                 int argb = 0xFF000000 | (ri << 16) | (gi << 8) | bi;
                 itemImg.setColorArgb(x, y, argb);
