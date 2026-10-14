@@ -1,0 +1,38 @@
+15th-anniversary|15th Anniversary
+aurora|Aurora
+birthday|Birthday
+builder|Builder
+cherry-blossom|Cherry Blossom
+cobalt|Cobalt
+common|Common
+copper|Copper
+crafter|Crafter
+followers|Followers
+founders|Founders
+hero|Hero
+home|Home
+mcc-15th-year|MCC 15th Year
+menace|Menace
+migrator|Migrator
+millionth-customer|Millionth Customer
+minecon-2011|MineCon 2011
+minecon-2012|MineCon 2012
+minecon-2013|MineCon 2013
+minecon-2015|MineCon 2015
+minecon-2016|MineCon 2016
+minecraft-experience|Minecraft Experience
+mojang|Mojang
+mojang-classic|Mojang Classic
+mojang-office|Mojang Office
+mojang-studios|Mojang Studios
+mojira-moderator|Mojira Moderator
+moonlight-trail|Moonlight Trail
+pan|Pan
+purple-heart|Purple Heart
+realms-mapmaker|Realms Mapmaker
+snowman|Snowman
+translator|Translator
+twisted|Twisted
+vanilla|Vanilla
+yearn|Yearn
+zombie-horse|Zombie Horse
