@@ -150,6 +150,7 @@ public class JumpCircle extends Module {
     private final List<Ring> rings = new ArrayList<>();
     private boolean wasOnGround;
     private double lastVy;
+    private int lastSpawnAge = -100;
 
     public JumpCircle() {
         super(BlockOutlinesAddon.COSMETICS, "jump-circle", "A ring (with a text inside) grows under your feet every time you jump.");
@@ -160,6 +161,7 @@ public class JumpCircle extends Module {
         rings.clear();
         wasOnGround = mc.player != null && mc.player.isOnGround();
         lastVy = 0;
+        lastSpawnAge = -100;
     }
 
     @EventHandler
@@ -167,16 +169,21 @@ public class JumpCircle extends Module {
         if (mc.player == null) return;
         boolean ground = mc.player.isOnGround();
         double vy = mc.player.getVelocity().y;
-        boolean rising = vy > 0.0;
-        boolean jumped = rising && !ground && (wasOnGround || !onlyGround.get())
-            && !mc.player.isGliding() && !mc.player.isTouchingWater() && !mc.player.isClimbing();
-        if (jumped && (wasOnGround || mc.player.age % 8 == 0)) spawn(1.0);
-        else if (landing.get() && ground && !wasOnGround && lastVy < -0.6 && !mc.player.isTouchingWater()) spawn(0.65);
+        boolean rising = vy > 0.1;
+        boolean blocked = mc.player.isGliding() || mc.player.isTouchingWater() || mc.player.isClimbing()
+            || mc.player.hasVehicle() || mc.player.getAbilities().flying || mc.player.isSpectator();
+        boolean cooldown = mc.player.age - lastSpawnAge < 6;
+        // a real jump: we were on the ground, now we are not, going up, and the jump key is held
+        boolean realJump = wasOnGround && !ground && rising && mc.options.jumpKey.isPressed();
+        boolean airJump = !onlyGround.get() && !ground && rising && mc.options.jumpKey.isPressed() && mc.player.age % 8 == 0;
+        if (!blocked && !cooldown && (realJump || airJump)) spawn(1.0);
+        else if (landing.get() && !blocked && ground && !wasOnGround && lastVy < -0.6) spawn(0.65);
         wasOnGround = ground;
         lastVy = vy;
     }
 
     private void spawn(double scale) {
+        lastSpawnAge = mc.player.age;
         rings.add(new Ring(mc.player.getX(), mc.player.getY() + 0.02, mc.player.getZ(), scale, mc.player.getYaw(), System.currentTimeMillis()));
         while (rings.size() > maxRings.get()) rings.remove(0);
     }
