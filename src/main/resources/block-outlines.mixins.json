@@ -11,7 +11,8 @@
     "ItemStackMixin",
     "StarrySkyRenderingMixin",
     "StarrySkyFogMixin",
-    "PlayerListEntryMixin"
+    "PlayerListEntryMixin",
+    "AbstractTextureAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -37,6 +37,14 @@ public abstract class ItemStackMixin {
         }
     }
 
+    /** Custom Glint can make every item glint. */
+    @Inject(method = "hasGlint", at = @At("RETURN"), cancellable = true, require = 0)
+    private void blockoutlines$allGlint(CallbackInfoReturnable<Boolean> cir) {
+        if (cir.getReturnValue()) return;
+        com.blockoutlines.addon.modules.CustomGlint glint = Modules.get() != null ? Modules.get().get(com.blockoutlines.addon.modules.CustomGlint.class) : null;
+        if (glint != null && glint.isActive() && glint.allItems.get() && !((ItemStack) (Object) this).isEmpty()) cir.setReturnValue(true);
+    }
+
     @Inject(method = "getTooltip", at = @At("RETURN"), cancellable = true, require = 1)
     private void blockoutlines$fakeTooltip(CallbackInfoReturnable<List<Text>> cir) {
         FakeElytra module = Modules.get() != null ? Modules.get().get(FakeElytra.class) : null;

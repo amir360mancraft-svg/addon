@@ -12,6 +12,8 @@ import com.blockoutlines.addon.modules.LightChunkFinder;
 import com.blockoutlines.addon.modules.NetheriteFinder;
 import com.blockoutlines.addon.modules.OgChunkFinder;
 import com.blockoutlines.addon.modules.CustomCape;
+import com.blockoutlines.addon.modules.CustomGlint;
+import com.blockoutlines.addon.modules.ItemCounterHud;
 import com.blockoutlines.addon.modules.JumpCircle;
 import com.blockoutlines.addon.modules.Pets;
 import com.blockoutlines.addon.modules.RegionMap;
@@ -62,6 +64,8 @@ public class BlockOutlinesAddon extends MeteorAddon {
         Modules.get().add(new JumpCircle());
         Modules.get().add(new CustomCape());
         Modules.get().add(new BaseFinder());
+        Modules.get().add(new CustomGlint());
+        Modules.get().add(new ItemCounterHud());
         LOG.info("Better Render loaded");
     }
 
