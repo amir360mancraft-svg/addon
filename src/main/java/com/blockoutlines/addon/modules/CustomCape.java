@@ -33,7 +33,7 @@ import java.util.Optional;
  * Pick one of 10 preset colours, or upload a normal Minecraft cape PNG (the same file draws the cape and the elytra).
  */
 public class CustomCape extends Module {
-    public enum Source { Preset, File }
+    public enum Source { Preset, Library }
 
     public enum Preset {
         Red(214, 48, 49), Orange(240, 128, 32), Yellow(245, 205, 48), Green(60, 175, 80), Cyan(40, 190, 200),
@@ -45,7 +45,8 @@ public class CustomCape extends Module {
 
     public enum Style { Gradient, Solid, Border, Stripe }
 
-    private static final String CAPE_FILE = "meteor-client/better-cape.png";
+    private static final String LIBRARY_DIR = "meteor-client/capes";
+    private static final String OLD_CAPE_FILE = "meteor-client/better-cape.png";
     private static final Identifier ID = Identifier.of("blockoutlines", "custom_cape");
     /** The game turns an asset id into the texture path textures/<id>.png, so the texture is registered there. */
     private static final Identifier TEXTURE_PATH = Identifier.of("blockoutlines", "textures/custom_cape.png");
@@ -53,8 +54,12 @@ public class CustomCape extends Module {
     private final SettingGroup sg = settings.getDefaultGroup();
 
     private final Setting<Source> source = sg.add(new EnumSetting.Builder<Source>()
-        .name("source").description("Preset = one of the built-in colours. File = the cape PNG you uploaded with the button below.")
+        .name("source").description("Preset = one of the built-in colours. Library = the Minecraft capes that come with the addon, plus your own PNGs and drawings.")
         .defaultValue(Source.Preset).build());
+    private final Setting<String> library = sg.add(new meteordevelopment.meteorclient.settings.ProvidedStringSetting.Builder()
+        .name("my-cape").description("Pick a cape: the Minecraft capes that come with the addon, and the PNGs you imported or drew.")
+        .defaultValue("").supplier(this::libraryNames)
+        .visible(() -> source.get() == Source.Library).build());
     private final Setting<Preset> preset = sg.add(new EnumSetting.Builder<Preset>()
         .name("color").description("Main colour of the preset cape and elytra.")
         .defaultValue(Preset.Purple).visible(() -> source.get() == Source.Preset).build());
@@ -67,7 +72,7 @@ public class CustomCape extends Module {
     private String builtKey = "";
 
     public CustomCape() {
-        super(BlockOutlinesAddon.COSMETICS, "custom-cape", "A custom cape and elytra for you: pick a colour or upload a cape PNG. Only you see it.");
+        super(BlockOutlinesAddon.COSMETICS, "custom-cape", "A custom cape and elytra for you: pick a Minecraft cape, a colour, your own PNG or draw one. Only you see it.");
     }
 
     @Override
@@ -83,8 +88,8 @@ public class CustomCape extends Module {
     @Override
     public WWidget getWidget(GuiTheme theme) {
         WVerticalList list = theme.verticalList();
-        WButton draw = list.add(theme.button("Draw cape (in game editor)")).expandX().widget();
-        WButton upload = list.add(theme.button("Upload cape (.png)")).expandX().widget();
+        WButton draw = list.add(theme.button("Draw a new cape (in game editor)")).expandX().widget();
+        WButton upload = list.add(theme.button("Import capes (select many .png)")).expandX().widget();
         WButton reset = list.add(theme.button("Back to preset colours")).expandX().widget();
         draw.action = this::openEditor;
         upload.action = this::upload;
@@ -111,7 +116,7 @@ public class CustomCape extends Module {
 
     @EventHandler
     private void onTick(TickEvent.Post event) {
-        String key = source.get() + "|" + preset.get() + "|" + style.get();
+        String key = source.get() + "|" + preset.get() + "|" + style.get() + "|" + library.get();
         if (key.equals(builtKey) && texture != null) return;
         builtKey = key;
         rebuild();
@@ -133,7 +138,7 @@ public class CustomCape extends Module {
     private void rebuild() {
         NativeImage image = null;
         try {
-            if (source.get() == Source.File) image = readFile();
+            if (source.get() == Source.Library) image = readLibrary();
             if (image == null) image = generate(preset.get(), style.get());
 
             release();
@@ -146,21 +151,91 @@ public class CustomCape extends Module {
         }
     }
 
-    private NativeImage readFile() {
-        File f = new File(mc.runDirectory, CAPE_FILE);
+    private File libraryDir() {
+        File dir = new File(mc.runDirectory, LIBRARY_DIR);
+        dir.mkdirs();
+        // the single cape of the older version becomes part of the library
+        File old = new File(mc.runDirectory, OLD_CAPE_FILE);
+        File moved = new File(dir, "my-old-cape.png");
+        if (old.isFile() && !moved.exists()) {
+            try {
+                Files.copy(old.toPath(), moved.toPath());
+            } catch (Exception ignored) {
+            }
+        }
+        return dir;
+    }
+
+    /** The Minecraft capes that come inside the addon (assets/blockoutlines/capes): display name -> file name. */
+    private java.util.Map<String, String> bundled;
+
+    private java.util.Map<String, String> bundled() {
+        if (bundled != null) return bundled;
+        java.util.Map<String, String> map = new java.util.LinkedHashMap<>();
+        try {
+            var res = mc.getResourceManager().getResource(Identifier.of("blockoutlines", "capes/index.txt"));
+            if (res.isPresent()) {
+                try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(res.get().getInputStream(), java.nio.charset.StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = r.readLine()) != null) {
+                        int bar = line.indexOf('|');
+                        if (bar > 0) map.put(line.substring(bar + 1).trim(), line.substring(0, bar).trim());
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        bundled = map;
+        return map;
+    }
+
+    /** Names of every cape you can pick: the ones in the addon plus your own files (own files win on the same name). */
+    private String[] libraryNames() {
+        java.util.TreeSet<String> names = new java.util.TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        names.addAll(bundled().keySet());
+        File[] files = libraryDir().listFiles((d, n) -> n.toLowerCase().endsWith(".png"));
+        if (files != null) for (File f : files) names.add(f.getName().substring(0, f.getName().length() - 4));
+        return names.toArray(new String[0]);
+    }
+
+    private NativeImage readLibrary() {
+        String name = library.get();
+        if (name == null || name.isBlank()) {
+            String[] all = libraryNames();
+            if (all.length == 0) return null; // nothing imported yet: the preset is shown instead
+            name = all[0];
+        }
+        File own = new File(libraryDir(), name + ".png");
+        if (own.isFile()) return readPng(own);
+
+        String slug = bundled().get(name);
+        if (slug == null) return null;
+        try {
+            var res = mc.getResourceManager().getResource(Identifier.of("blockoutlines", "capes/" + slug + ".png"));
+            if (res.isEmpty()) return null;
+            try (InputStream in = res.get().getInputStream()) {
+                return NativeImage.read(in);
+            }
+        } catch (Exception e) {
+            error("Could not read the cape " + name + ": " + e.getMessage());
+            return null;
+        }
+    }
+
+    private NativeImage readPng(File f) {
         if (!f.isFile()) return null;
         try (InputStream in = Files.newInputStream(f.toPath())) {
             NativeImage img = NativeImage.read(in);
             int w = img.getWidth(), h = img.getHeight();
             if (w * 32 != h * 64) {
                 // a cape PNG is 64x32 (or a multiple of it); anything else cannot be mapped onto the cape model
-                error("The cape PNG must be 64x32 (or 128x64, 256x128 ...). This one is " + w + "x" + h + ".");
+                error(f.getName() + ": a cape PNG must be 64x32 (or 128x64, 256x128 ...). This one is " + w + "x" + h + ".");
                 img.close();
                 return null;
             }
             return img;
         } catch (Exception e) {
-            error("Could not read the cape PNG: " + e.getMessage());
+            error("Could not read " + f.getName() + ": " + e.getMessage());
             return null;
         }
     }
@@ -168,7 +243,7 @@ public class CustomCape extends Module {
     /** Opens the pixel editor, starting from your saved cape or from the current preset. */
     private void openEditor() {
         int[] start = null;
-        if (source.get() == Source.File) start = readPixels();
+        if (source.get() == Source.Library) start = pixelsOf(readLibrary());
         if (start == null) start = presetPixels();
         mc.setScreen(new CapeEditorScreen(mc.currentScreen, start, this::presetPixels, this::savePixels));
     }
@@ -181,9 +256,8 @@ public class CustomCape extends Module {
         return out;
     }
 
-    /** Reads the saved cape PNG as 64x32 pixels (bigger files are sampled down). */
-    private int[] readPixels() {
-        NativeImage img = readFile();
+    /** Reads an image as 64x32 pixels (bigger files are sampled down) and closes it. */
+    private int[] pixelsOf(NativeImage img) {
         if (img == null) return null;
         int w = img.getWidth(), h = img.getHeight();
         int[] out = new int[64 * 32];
@@ -195,33 +269,56 @@ public class CustomCape extends Module {
     private void savePixels(int[] pixels) {
         try (NativeImage img = new NativeImage(64, 32, true)) {
             for (int y = 0; y < 32; y++) for (int x = 0; x < 64; x++) img.setColorArgb(x, y, pixels[y * 64 + x]);
-            File target = new File(mc.runDirectory, CAPE_FILE);
-            target.getParentFile().mkdirs();
+            File dir = libraryDir();
+            int n = 1;
+            while (new File(dir, "drawing-" + n + ".png").exists()) n++;
+            File target = new File(dir, "drawing-" + n + ".png");
             img.writeTo(target);
-            source.set(Source.File);
+            library.set("drawing-" + n);
+            source.set(Source.Library);
             builtKey = "";
-            info("Cape saved.");
+            info("Cape saved as drawing-" + n + " in your library.");
         } catch (Exception e) {
             error("Could not save the cape: " + e.getMessage());
         }
     }
 
+    /** Imports many PNGs at once: select them all in the file dialog (Ctrl+A). */
     private void upload() {
         try {
             PointerBuffer filters = BufferUtils.createPointerBuffer(1);
             filters.put(MemoryUtil.memASCII("*.png"));
             filters.rewind();
-            String path = TinyFileDialogs.tinyfd_openFileDialog("Select cape PNG", null, filters, "PNG images", false);
-            if (path == null) return;
+            String paths = TinyFileDialogs.tinyfd_openFileDialog("Select cape PNGs (you can select many)", null, filters, "PNG images", true);
+            if (paths == null) return;
 
-            File target = new File(mc.runDirectory, CAPE_FILE);
-            target.getParentFile().mkdirs();
-            Files.copy(java.nio.file.Path.of(path), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            source.set(Source.File);
-            builtKey = "";
-            info("Cape updated.");
+            File dir = libraryDir();
+            int ok = 0, bad = 0;
+            String first = null;
+            for (String path : paths.split("\\|")) {
+                if (path.isBlank()) continue;
+                File src = new File(path);
+                String name = src.getName();
+                if (!name.toLowerCase().endsWith(".png")) { bad++; continue; }
+                name = name.substring(0, name.length() - 4).replaceAll("[^A-Za-z0-9 _()+.'-]", "_");
+                try (InputStream in = Files.newInputStream(src.toPath()); NativeImage img = NativeImage.read(in)) {
+                    if (img.getWidth() * 32 != img.getHeight() * 64) { bad++; continue; }
+                } catch (Exception e) {
+                    bad++;
+                    continue;
+                }
+                Files.copy(src.toPath(), new File(dir, name + ".png").toPath(), StandardCopyOption.REPLACE_EXISTING);
+                if (first == null) first = name;
+                ok++;
+            }
+            if (first != null) {
+                library.set(first);
+                source.set(Source.Library);
+                builtKey = "";
+            }
+            info(ok + " cape(s) imported" + (bad > 0 ? ", " + bad + " skipped (not a 64x32 PNG)" : "") + ". Pick one in \"my-cape\".");
         } catch (Exception e) {
-            error("Could not load that file: " + e.getMessage());
+            error("Could not import: " + e.getMessage());
         }
     }
 
