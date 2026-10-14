@@ -60,12 +60,15 @@ public class JumpCircle extends Module {
     private final Setting<Double> thickness = sgRing.add(new DoubleSetting.Builder()
         .name("ring-thickness").description("Width of the ring in blocks.")
         .defaultValue(0.08).range(0.005, 0.6).sliderRange(0.01, 0.4).build());
+    private final Setting<Integer> fadeStart = sgRing.add(new IntSetting.Builder()
+        .name("fade-start").description("Percent of the lifetime the ring stays fully solid before it starts to fade (0 = fades right away).")
+        .defaultValue(40).range(0, 95).sliderRange(0, 90).build());
     private final Setting<Integer> ringAlpha = sgRing.add(new IntSetting.Builder()
         .name("ring-alpha").description("Opacity of the ring (0 = invisible, 255 = solid).")
         .defaultValue(255).range(0, 255).sliderRange(0, 255).build());
     private final Setting<Boolean> softEdge = sgRing.add(new BoolSetting.Builder()
-        .name("soft-edge").description("The inner side of the ring fades out smoothly.")
-        .defaultValue(true).build());
+        .name("soft-edge").description("The inner side of the ring fades out smoothly (off = fully solid band).")
+        .defaultValue(false).build());
     private final Setting<Boolean> fill = sgRing.add(new BoolSetting.Builder()
         .name("fill").description("Fill the inside with a faint disc.")
         .defaultValue(true).build());
@@ -206,7 +209,8 @@ public class JumpCircle extends Module {
             double t = (now - ring.start) / (double) life;
             double ease = 1.0 - Math.pow(1.0 - t, 3.0);
             double radius = (r0 + (r1 - r0) * ease) * ring.scale;
-            double fade = Math.pow(1.0 - t, 1.3);
+            double fs = fadeStart.get() / 100.0;
+            double fade = t <= fs ? 1.0 : Math.pow((1.0 - t) / (1.0 - fs), 1.3);
             double y = ring.y + rise.get() * ease;
             double bright = pulse.get() ? 0.65 + 0.35 * Math.sin(t * Math.PI * 6.0) : 1.0;
             int a = clamp(ringAlpha.get() * fade * bright);
@@ -261,7 +265,7 @@ public class JumpCircle extends Module {
         if (alpha <= 0) return;
         for (int i = 0; i < n; i++) {
             double a0 = Math.PI * 2.0 * i / n, a1 = Math.PI * 2.0 * (i + 1) / n;
-            Color centre = ringColor(0.0, alpha / 3, seconds, 0.0);
+            Color centre = ringColor(0.0, alpha * 2 / 3, seconds, 0.0);
             Color edge = ringColor(1.0, alpha, seconds, (double) i / n);
             event.renderer.quad(
                 ring.x, y, ring.z,
