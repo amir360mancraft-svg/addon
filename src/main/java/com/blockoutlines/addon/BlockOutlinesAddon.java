@@ -21,6 +21,7 @@ import com.blockoutlines.addon.modules.PlayerSigns;
 import com.blockoutlines.addon.modules.Saturation;
 import com.blockoutlines.addon.modules.StarrySky;
 import com.blockoutlines.addon.modules.SusChunk;
+import com.blockoutlines.addon.modules.TargetHud;
 import com.blockoutlines.addon.modules.Wings;
 import com.mojang.logging.LogUtils;
 import meteordevelopment.meteorclient.addons.GithubRepo;
@@ -66,6 +67,7 @@ public class BlockOutlinesAddon extends MeteorAddon {
         Modules.get().add(new BaseFinder());
         Modules.get().add(new CustomGlint());
         Modules.get().add(new ItemCounterHud());
+        Modules.get().add(new TargetHud());
         LOG.info("Better Render loaded");
     }
 
