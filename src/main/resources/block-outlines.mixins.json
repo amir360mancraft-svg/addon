@@ -7,6 +7,7 @@
     "GameRendererInvoker",
     "InGameHudMixin",
     "BipedEntityRendererMixin",
+    "ArmorTrimMixin",
     "ItemModelManagerMixin",
     "ItemStackMixin",
     "StarrySkyRenderingMixin",

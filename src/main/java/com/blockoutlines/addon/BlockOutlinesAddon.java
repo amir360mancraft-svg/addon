@@ -2,6 +2,7 @@ package com.blockoutlines.addon;
 
 import com.blockoutlines.addon.modules.AmethystFinder;
 import com.blockoutlines.addon.modules.AnimatedSky;
+import com.blockoutlines.addon.modules.ArmorTrimChanger;
 import com.blockoutlines.addon.modules.BaseFinder;
 import com.blockoutlines.addon.modules.BlockOutlines;
 import com.blockoutlines.addon.modules.ChinaHat;
@@ -70,6 +71,7 @@ public class BlockOutlinesAddon extends MeteorAddon {
         Modules.get().add(new ItemCounterHud());
         Modules.get().add(new TargetHud());
         Modules.get().add(new ItemDropPhysics());
+        Modules.get().add(new ArmorTrimChanger());
         LOG.info("Better Render loaded");
     }
 
