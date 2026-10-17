@@ -17,6 +17,7 @@ import com.blockoutlines.addon.modules.CustomGlint;
 import com.blockoutlines.addon.modules.ItemCounterHud;
 import com.blockoutlines.addon.modules.ItemDropPhysics;
 import com.blockoutlines.addon.modules.JumpCircle;
+import com.blockoutlines.addon.modules.KillEffect;
 import com.blockoutlines.addon.modules.Pets;
 import com.blockoutlines.addon.modules.RegionMap;
 import com.blockoutlines.addon.modules.PlayerSigns;
@@ -72,6 +73,7 @@ public class BlockOutlinesAddon extends MeteorAddon {
         Modules.get().add(new TargetHud());
         Modules.get().add(new ItemDropPhysics());
         Modules.get().add(new ArmorTrimChanger());
+        Modules.get().add(new KillEffect());
         LOG.info("Better Render loaded");
     }
 
