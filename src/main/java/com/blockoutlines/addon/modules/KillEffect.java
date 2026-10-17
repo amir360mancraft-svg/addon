@@ -4,6 +4,7 @@ import com.blockoutlines.addon.BlockOutlinesAddon;
 import com.blockoutlines.addon.util.CosmeticUtil;
 import meteordevelopment.meteorclient.events.entity.player.AttackEntityEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
+import meteordevelopment.meteorclient.events.render.Render2DEvent;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.renderer.Renderer3D;
@@ -46,6 +47,7 @@ public class KillEffect extends Module {
     private final SettingGroup sgBolt = settings.createGroup("Lightning");
     private final SettingGroup sgWave = settings.createGroup("Circle");
     private final SettingGroup sgBurst = settings.createGroup("Explosion");
+    private final SettingGroup sgEpic = settings.createGroup("Epic extras");
 
     // -------- general
     private final Setting<Boolean> players = sgGeneral.add(new BoolSetting.Builder()
@@ -76,10 +78,10 @@ public class KillEffect extends Module {
         .defaultValue(new SettingColor(120, 110, 255, 255)).visible(bolt::get).build());
     private final Setting<Double> boltWidth = sgBolt.add(new DoubleSetting.Builder()
         .name("width").description("Thickness of the bolt in blocks.")
-        .defaultValue(0.18).range(0.02, 1.5).sliderRange(0.05, 0.8).visible(bolt::get).build());
+        .defaultValue(0.22).range(0.02, 1.5).sliderRange(0.05, 0.8).visible(bolt::get).build());
     private final Setting<Integer> boltHeight = sgBolt.add(new IntSetting.Builder()
         .name("height").description("How high the bolt starts above the spot.")
-        .defaultValue(55).range(10, 200).sliderRange(15, 120).visible(bolt::get).build());
+        .defaultValue(70).range(10, 200).sliderRange(15, 120).visible(bolt::get).build());
     private final Setting<Integer> boltBranches = sgBolt.add(new IntSetting.Builder()
         .name("branches").description("Number of side branches.")
         .defaultValue(5).range(0, 14).sliderRange(0, 10).visible(bolt::get).build());
@@ -129,7 +131,7 @@ public class KillEffect extends Module {
         .name("explosion").description("Sparks fly out when the circle collapses.").defaultValue(true).build());
     private final Setting<Integer> count = sgBurst.add(new IntSetting.Builder()
         .name("particles").description("Number of sparks.")
-        .defaultValue(110).range(10, 600).sliderRange(20, 400).visible(burst::get).build());
+        .defaultValue(170).range(10, 600).sliderRange(20, 400).visible(burst::get).build());
     private final Setting<Double> speed = sgBurst.add(new DoubleSetting.Builder()
         .name("speed").description("How fast the sparks fly out (blocks per second).")
         .defaultValue(9.0).range(1.0, 40.0).sliderRange(2.0, 25.0).visible(burst::get).build());
@@ -161,12 +163,33 @@ public class KillEffect extends Module {
     private final Setting<Boolean> burstRing = sgBurst.add(new BoolSetting.Builder()
         .name("shock-ring").description("A fast flat ring flies out with the explosion.").defaultValue(true).visible(burst::get).build());
 
+    // -------- epic extras
+    private final Setting<Boolean> multiStrike = sgEpic.add(new BoolSetting.Builder()
+        .name("triple-strike").description("Two more bolts strike right after the first one, close by.").defaultValue(true).build());
+    private final Setting<Boolean> pillar = sgEpic.add(new BoolSetting.Builder()
+        .name("light-pillar").description("A beam of light rises from the spot after the strike, and a bigger one at the explosion.").defaultValue(true).build());
+    private final Setting<Boolean> runes = sgEpic.add(new BoolSetting.Builder()
+        .name("rune-circle").description("A spinning magic star and inner circle on the ground while the circle grows.").defaultValue(true).build());
+    private final Setting<Boolean> extraRings = sgEpic.add(new BoolSetting.Builder()
+        .name("extra-rings").description("Two smaller rings inside the big one and a faint energy wall around it.").defaultValue(true).build());
+    private final Setting<Boolean> arcs = sgEpic.add(new BoolSetting.Builder()
+        .name("edge-lightning").description("Small lightning arcs crackle along the edge of the growing circle.").defaultValue(true).build());
+    private final Setting<Boolean> embers = sgEpic.add(new BoolSetting.Builder()
+        .name("rising-embers").description("Glowing embers float up after the explosion.").defaultValue(true).build());
+    private final Setting<Boolean> screenFlash = sgEpic.add(new BoolSetting.Builder()
+        .name("screen-flash").description("The screen flashes white for a moment when the lightning strikes (stronger when you are close).").defaultValue(true).build());
+    private final Setting<Integer> flashStrength = sgEpic.add(new IntSetting.Builder()
+        .name("flash-strength").description("How bright the screen flash is (0-255).")
+        .defaultValue(150).range(10, 255).sliderRange(30, 255).visible(screenFlash::get).build());
+    private final Setting<Boolean> boom = sgEpic.add(new BoolSetting.Builder()
+        .name("explosion-sound").description("A deep boom at the explosion and a rumble after the thunder.").defaultValue(true).build());
+
     // -------- state
     private static final class Fx {
         final double x, y, z;
         final long start;
         final long seed;
-        boolean burstDone;
+        boolean burstDone, rumbled;
         Fx(double x, double y, double z, long start, long seed) { this.x = x; this.y = y; this.z = z; this.start = start; this.seed = seed; }
     }
 
@@ -174,6 +197,7 @@ public class KillEffect extends Module {
         double x, y, z, vx, vy, vz;
         double age, life, size;
         float hue;
+        double gMul = 1, dragMul = 1;
     }
 
     private final List<Fx> effects = new ArrayList<>();
@@ -280,7 +304,18 @@ public class KillEffect extends Module {
             Fx f = effects.get(i);
             long age = now - f.start;
 
-            if (bolt.get() && age < boltTime.get()) drawBolt(r, f, age);
+            if (bolt.get()) {
+                if (age < boltTime.get()) drawBolt(r, f, age, 0, 0, 0, 1.0);
+                if (multiStrike.get()) {
+                    if (age > 90 && age - 90 < boltTime.get()) drawBolt(r, f, age - 90, 3.6, -2.4, 11, 0.7);
+                    if (age > 170 && age - 170 < boltTime.get()) drawBolt(r, f, age - 170, -3.1, 3.3, 23, 0.7);
+                }
+            }
+            if (pillar.get() && age < 900) drawPillar(r, f, age);
+            if (boom.get() && !f.rumbled && age > 380) {
+                f.rumbled = true;
+                if (mc.world != null) mc.world.playSoundClient(f.x, f.y, f.z, SoundEvents.ENTITY_LIGHTNING_BOLT_THUNDER, SoundCategory.WEATHER, 3f * volume.get().floatValue(), 0.55f, false);
+            }
 
             if (wave.get() && age < collapseEnd) drawCircle(r, f, age, grow, shrink);
 
@@ -288,14 +323,16 @@ public class KillEffect extends Module {
             if (!f.burstDone && age >= collapseEnd) {
                 f.burstDone = true;
                 if (burst.get()) spawnSparks(f);
+                if (boom.get() && mc.world != null) mc.world.playSoundClient(f.x, f.y, f.z, SoundEvents.ENTITY_LIGHTNING_BOLT_IMPACT, SoundCategory.WEATHER, 3f * volume.get().floatValue(), 0.5f, false);
             }
             long burstAge = age - collapseEnd;
             if (burst.get() && burstAge >= 0) {
                 if (flash.get() && burstAge < 260) drawFlash(r, f, burstAge);
                 if (burstRing.get() && burstAge < 420) drawShockRing(r, f, burstAge);
+                if (pillar.get() && burstAge < 450) drawBigBeam(r, f, burstAge);
             }
 
-            long end = Math.max(collapseEnd + 450, boltTime.get());
+            long end = Math.max(collapseEnd + 500, Math.max(boltTime.get() + 200L, 900L));
             if (age > end) { effects.remove(i); }
         }
 
@@ -304,35 +341,36 @@ public class KillEffect extends Module {
 
     // ---- lightning
 
-    private void drawBolt(Renderer3D r, Fx f, long age) {
+    private void drawBolt(Renderer3D r, Fx f, long age, double ox, double oz, long seedAdd, double widthScale) {
         double t = age / (double) boltTime.get();
         double fade = Math.pow(1.0 - t, 0.8);
 
         int frame = boltFlicker.get() ? (int) (age / 55) : 0;
-        Random rnd = new Random(f.seed + frame * 7919L);
+        Random rnd = new Random(f.seed + seedAdd + frame * 7919L);
+        double bx0 = f.x + ox, bz0 = f.z + oz;
         double flick = boltFlicker.get() ? 0.55 + 0.45 * rnd.nextDouble() : 1.0;
         if (age < 60) flick = 1.0; // the first instant is always full bright
 
-        double w = boltWidth.get();
+        double w = boltWidth.get() * widthScale;
         int segs = 26;
         double top = f.y + boltHeight.get();
         double[] px = new double[segs + 1], py = new double[segs + 1], pz = new double[segs + 1];
         double dx = 0, dz = 0;
         for (int k = 0; k <= segs; k++) {
             double h = k / (double) segs;
-            px[k] = f.x + dx * (1 - h);
-            pz[k] = f.z + dz * (1 - h);
+            px[k] = bx0 + dx * (1 - h);
+            pz[k] = bz0 + dz * (1 - h);
             py[k] = top + (f.y - top) * h;
             double step = 1.5 * (1 - h * 0.6);
             dx += (rnd.nextDouble() - 0.5) * step * 1.6;
             dz += (rnd.nextDouble() - 0.5) * step * 1.6;
-            if (k == segs) { px[k] = f.x; pz[k] = f.z; }
+            if (k == segs) { px[k] = bx0; pz[k] = bz0; }
         }
         // pull the end exactly onto the spot: blend the last points
         for (int k = segs - 4; k < segs; k++) {
             double a = (k - (segs - 4)) / 4.0;
-            px[k] = px[k] * (1 - a) + f.x * a;
-            pz[k] = pz[k] * (1 - a) + f.z * a;
+            px[k] = px[k] * (1 - a) + bx0 * a;
+            pz[k] = pz[k] * (1 - a) + bz0 * a;
         }
 
         ribbon(r, px, py, pz, segs + 1, w * 3.2, boltGlow.get(), (int) (150 * fade * flick));
@@ -362,7 +400,7 @@ public class KillEffect extends Module {
         // flash where it hits the ground
         if (age < 220) {
             double a = 1.0 - age / 220.0;
-            glow(r, f.x, f.y + 0.3, f.z, 2.6 + 1.2 * (1 - a), boltGlow.get(), (int) (200 * a));
+            glow(r, bx0, f.y + 0.3, bz0, (2.6 + 1.2 * (1 - a)) * widthScale, boltGlow.get(), (int) (200 * a));
         }
     }
 
@@ -440,6 +478,15 @@ public class KillEffect extends Module {
             }
         }
         if (s == Shape.Sphere || s == Shape.Both) sphere(r, f.x, f.y + rad * 0.5 + 0.2, f.z, rad * 0.9, (int) (alpha * 0.32), seconds);
+
+        boolean flat = s == Shape.Flat || s == Shape.Both;
+        if (flat && extraRings.get()) {
+            flatRing(r, f.x, y + 0.01, f.z, rad * 0.66, Math.min(ringWidth.get() * 0.6, rad * 0.66), (int) (alpha * 0.8), seconds + 0.2);
+            flatRing(r, f.x, y + 0.02, f.z, rad * 0.33, Math.min(ringWidth.get() * 0.4, rad * 0.33), (int) (alpha * 0.7), seconds + 0.4);
+            energyWall(r, f.x, y, f.z, rad, Math.min(2.2, 0.5 + rad * 0.18), (int) (alpha * 0.28), seconds);
+        }
+        if (flat && runes.get()) drawRunes(r, f, y + 0.03, rad, alpha, age);
+        if (flat && arcs.get() && age < grow) drawEdgeArcs(r, f, y, rad, age);
     }
 
     private void flatRing(Renderer3D r, double x, double y, double z, double rad, double width, int alpha, double seconds) {
@@ -473,6 +520,126 @@ public class KillEffect extends Module {
         }
     }
 
+    /** A faint see-through wall that stands on the edge of the circle. */
+    private void energyWall(Renderer3D r, double x, double y, double z, double rad, double h, int alpha, double seconds) {
+        if (alpha <= 0) return;
+        int n = 48;
+        for (int i = 0; i < n; i++) {
+            double a0 = Math.PI * 2 * i / n, a1 = Math.PI * 2 * (i + 1) / n;
+            Color low = waveColor(1.0, alpha, seconds, i / (double) n);
+            Color high = waveColor(1.0, 0, seconds, i / (double) n);
+            quad(r, x + Math.cos(a0) * rad, y, z + Math.sin(a0) * rad, x + Math.cos(a1) * rad, y, z + Math.sin(a1) * rad,
+                x + Math.cos(a1) * rad, y + h, z + Math.sin(a1) * rad, x + Math.cos(a0) * rad, y + h, z + Math.sin(a0) * rad, low, low, high, high);
+        }
+    }
+
+    /** A flat line on the ground between two points. */
+    private void groundLine(Renderer3D r, double x0, double z0, double x1, double z1, double y, double width, Color c) {
+        double dx = x1 - x0, dz = z1 - z0;
+        double l = Math.max(1e-6, Math.sqrt(dx * dx + dz * dz));
+        double nx = -dz / l * width * 0.5, nz = dx / l * width * 0.5;
+        quad(r, x0 - nx, y, z0 - nz, x0 + nx, y, z0 + nz, x1 + nx, y, z1 + nz, x1 - nx, y, z1 - nz, c, c, c, c);
+    }
+
+    /** A spinning six pointed star with an inner circle, like a magic seal. */
+    private void drawRunes(Renderer3D r, Fx f, double y, double rad, int alpha, long age) {
+        double spin = age * 0.0011;
+        double seconds = age / 1000.0;
+        double star = rad * 0.82;
+        double w = Math.max(0.05, Math.min(0.2, rad * 0.018));
+        Color c = waveColor(0.5, (int) (alpha * 0.9), seconds, 0.1);
+        for (int tri = 0; tri < 2; tri++) {
+            for (int k = 0; k < 3; k++) {
+                double a0 = spin + tri * Math.PI / 3 + k * Math.PI * 2 / 3;
+                double a1 = spin + tri * Math.PI / 3 + (k + 1) * Math.PI * 2 / 3;
+                groundLine(r, f.x + Math.cos(a0) * star, f.z + Math.sin(a0) * star, f.x + Math.cos(a1) * star, f.z + Math.sin(a1) * star, y, w, c);
+            }
+        }
+        // small circle at every tip, turning the other way
+        for (int k = 0; k < 6; k++) {
+            double a = -spin * 0.6 + k * Math.PI / 3;
+            flatRing(r, f.x + Math.cos(a) * star, y + 0.005, f.z + Math.sin(a) * star, Math.max(0.2, rad * 0.06), Math.max(0.05, rad * 0.015), (int) (alpha * 0.9), seconds);
+        }
+        flatRing(r, f.x, y + 0.004, f.z, star * 0.55, w * 1.4, (int) (alpha * 0.9), seconds + 0.3);
+    }
+
+    /** Small lightning arcs that jump from the edge of the circle. */
+    private void drawEdgeArcs(Renderer3D r, Fx f, double y, double rad, long age) {
+        int frame = (int) (age / 70);
+        Random rnd = new Random(f.seed + 91L * frame);
+        int k = Math.max(3, Math.min(9, (int) (rad * 0.8)));
+        for (int i = 0; i < k; i++) {
+            double a = rnd.nextDouble() * Math.PI * 2;
+            double len = 1.2 + rnd.nextDouble() * 2.4;
+            int n = 6;
+            double[] x = new double[n + 1], yy = new double[n + 1], z = new double[n + 1];
+            double dirA = a + Math.PI + (rnd.nextDouble() - 0.5) * 1.2; // mostly inward
+            x[0] = f.x + Math.cos(a) * rad; z[0] = f.z + Math.sin(a) * rad; yy[0] = y + 0.1;
+            for (int j = 1; j <= n; j++) {
+                dirA += (rnd.nextDouble() - 0.5) * 1.3;
+                x[j] = x[j - 1] + Math.cos(dirA) * len / n;
+                z[j] = z[j - 1] + Math.sin(dirA) * len / n;
+                yy[j] = yy[j - 1] + (rnd.nextDouble() - 0.35) * 0.45;
+            }
+            ribbon(r, x, yy, z, n + 1, 0.22, boltGlow.get(), 130);
+            ribbon(r, x, yy, z, n + 1, 0.07, boltCore.get(), 230);
+        }
+    }
+
+    /** A column of light that rises from the spot: it goes bright, then fades. */
+    private void drawPillar(Renderer3D r, Fx f, long age) {
+        double t = age / 900.0;
+        double rad = 0.9 * (1.0 - 0.7 * t) + 0.12;
+        int a = (int) (170 * Math.pow(1.0 - t, 1.5));
+        beam(r, f.x, f.y, f.z, rad, boltHeight.get(), boltGlow.get(), a);
+        beam(r, f.x, f.y, f.z, rad * 0.4, boltHeight.get(), boltCore.get(), (int) (a * 1.1));
+    }
+
+    /** A big, wide beam at the moment of the explosion. */
+    private void drawBigBeam(Renderer3D r, Fx f, long burstAge) {
+        double u = burstAge / 450.0;
+        double rad = Math.min(radius.get() * 0.12, 1.6) * (0.6 + 0.8 * Math.sqrt(u)) * (1 - u * 0.4) + 0.3;
+        int a = (int) (200 * Math.pow(1.0 - u, 1.3));
+        beam(r, f.x, f.y, f.z, rad, boltHeight.get() * 1.2, sparkA.get(), a);
+        beam(r, f.x, f.y, f.z, rad * 0.45, boltHeight.get() * 1.2, boltCore.get(), (int) (a * 1.1));
+    }
+
+    private void beam(Renderer3D r, double x, double y, double z, double rad, double h, SettingColor col, int alpha) {
+        if (alpha <= 0) return;
+        Color low = new Color(col.r, col.g, col.b, Math.min(255, alpha));
+        Color high = new Color(col.r, col.g, col.b, 0);
+        int n = 14;
+        for (int i = 0; i < n; i++) {
+            double a0 = Math.PI * 2 * i / n, a1 = Math.PI * 2 * (i + 1) / n;
+            quad(r, x + Math.cos(a0) * rad, y, z + Math.sin(a0) * rad, x + Math.cos(a1) * rad, y, z + Math.sin(a1) * rad,
+                x + Math.cos(a1) * rad * 0.6, y + h, z + Math.sin(a1) * rad * 0.6, x + Math.cos(a0) * rad * 0.6, y + h, z + Math.sin(a0) * rad * 0.6,
+                low, low, high, high);
+        }
+    }
+
+    // ---- screen flash
+
+    @EventHandler
+    private void onRender2D(Render2DEvent event) {
+        if (!screenFlash.get() || effects.isEmpty() || mc.player == null || mc.getWindow() == null) return;
+        long now = System.currentTimeMillis();
+        double best = 0;
+        long collapseEnd = wave.get() ? growTime.get() + shrinkTime.get() : 0;
+        for (Fx f : effects) {
+            long age = now - f.start;
+            double d = Math.sqrt(mc.player.squaredDistanceTo(f.x, f.y, f.z));
+            double near = Math.max(0, 1.0 - d / Math.max(20.0, range.get() * 0.5)); // closer = brighter
+            double v = 0;
+            if (bolt.get() && age >= 0 && age < 170) v = Math.max(v, 1.0 - age / 170.0);
+            if (burst.get() && age >= collapseEnd && age - collapseEnd < 150) v = Math.max(v, 0.55 * (1.0 - (age - collapseEnd) / 150.0));
+            best = Math.max(best, v * near);
+        }
+        int a = (int) (flashStrength.get() * best);
+        if (a <= 1) return;
+        int w = mc.getWindow().getScaledWidth(), h = mc.getWindow().getScaledHeight();
+        event.drawContext.fill(0, 0, w, h, (Math.min(255, a) << 24) | 0xEAF0FF);
+    }
+
     // ---- explosion
 
     private void drawFlash(Renderer3D r, Fx f, long burstAge) {
@@ -503,6 +670,20 @@ public class KillEffect extends Module {
             s.hue = random.nextFloat();
             sparks.add(s);
         }
+        if (embers.get()) {
+            double spread = Math.max(1.0, radius.get() * 0.55);
+            for (int i = 0; i < n / 2; i++) {
+                Spark s = new Spark();
+                double a = random.nextDouble() * Math.PI * 2, d = Math.sqrt(random.nextDouble()) * spread;
+                s.x = f.x + Math.cos(a) * d; s.y = f.y + 0.1 + random.nextDouble() * 0.6; s.z = f.z + Math.sin(a) * d;
+                s.vx = (random.nextDouble() - 0.5) * 0.8; s.vz = (random.nextDouble() - 0.5) * 0.8; s.vy = 1.0 + random.nextDouble() * 2.5;
+                s.life = 1.6 + random.nextDouble() * 1.6;
+                s.size = size.get() * (0.35 + 0.4 * random.nextDouble());
+                s.hue = random.nextFloat();
+                s.gMul = -0.15; s.dragMul = 0.35;
+                sparks.add(s);
+            }
+        }
         while (sparks.size() > 2500) sparks.remove(0);
     }
 
@@ -517,8 +698,9 @@ public class KillEffect extends Module {
             s.age += dt;
             if (s.age >= s.life) { sparks.remove(i); continue; }
 
-            s.vy -= g * dt;
-            s.vx *= slow; s.vy *= slow; s.vz *= slow;
+            s.vy -= g * s.gMul * dt;
+            double sl = s.dragMul == 1 ? slow : Math.exp(-drag.get() * s.dragMul * dt);
+            s.vx *= sl; s.vy *= sl; s.vz *= sl;
             s.x += s.vx * dt; s.y += s.vy * dt; s.z += s.vz * dt;
 
             double t = s.age / s.life;
@@ -535,7 +717,7 @@ public class KillEffect extends Module {
             }
 
             double speedNow = Math.sqrt(s.vx * s.vx + s.vy * s.vy + s.vz * s.vz);
-            if (dots || speedNow < 0.4) {
+            if (dots || speedNow < 0.4 || s.gMul < 0) {
                 billboard(r, s.x, s.y, s.z, sz, core);
                 billboard(r, s.x, s.y, s.z, sz * 2.6, glowC);
             } else {
