@@ -26,6 +26,10 @@ import net.minecraft.registry.RegistryKeys;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.util.Identifier;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -49,47 +53,48 @@ public class ArmorTrimChanger extends Module {
         public String id() { return name().toLowerCase(); }
     }
 
-    private final SettingGroup sg = settings.getDefaultGroup();
+    public static final EquipmentSlot[] SLOTS = {EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET};
+    public static final String[] SLOT_NAMES = {"Helmet", "Chestplate", "Leggings", "Boots"};
 
-    public final Setting<Pattern> pattern = sg.add(new EnumSetting.Builder<Pattern>()
-        .name("pattern")
-        .description("Trim pattern.")
-        .defaultValue(Pattern.Silence)
-        .build()
-    );
+    private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
-    public final Setting<Material> material = sg.add(new EnumSetting.Builder<Material>()
-        .name("material")
-        .description("Trim material (the color).")
-        .defaultValue(Material.Redstone)
-        .build()
-    );
-
-    private final Setting<Boolean> helmet = sg.add(new BoolSetting.Builder().name("helmet").description("Trim on the helmet.").defaultValue(true).build());
-    private final Setting<Boolean> chest = sg.add(new BoolSetting.Builder().name("chestplate").description("Trim on the chestplate.").defaultValue(true).build());
-    private final Setting<Boolean> legs = sg.add(new BoolSetting.Builder().name("leggings").description("Trim on the leggings.").defaultValue(true).build());
-    private final Setting<Boolean> boots = sg.add(new BoolSetting.Builder().name("boots").description("Trim on the boots.").defaultValue(true).build());
-
-    private final Setting<Boolean> replaceExisting = sg.add(new BoolSetting.Builder()
+    private final Setting<Boolean> replaceExisting = sgGeneral.add(new BoolSetting.Builder()
         .name("replace-existing")
         .description("Also replace a trim that the armor already has. Off = only armor without a trim gets one.")
         .defaultValue(false)
         .build()
     );
 
-    private final Setting<Boolean> everyone = sg.add(new BoolSetting.Builder()
+    private final Setting<Boolean> everyone = sgGeneral.add(new BoolSetting.Builder()
         .name("all-players")
-        .description("Also show this trim on other players' armor (only on your screen).")
+        .description("Also show these trims on other players' armor (only on your screen).")
         .defaultValue(false)
         .build()
     );
 
+    // every piece of armor has its own switch, pattern and material
+    private final List<Setting<Boolean>> on = new ArrayList<>();
+    private final List<Setting<Pattern>> patterns = new ArrayList<>();
+    private final List<Setting<Material>> materials = new ArrayList<>();
+
+    {
+        for (int i = 0; i < SLOTS.length; i++) {
+            SettingGroup g = settings.createGroup(SLOT_NAMES[i]);
+            String n = SLOT_NAMES[i].toLowerCase();
+            on.add(g.add(new BoolSetting.Builder().name(n + "-trim").description("Show a trim on the " + n + ".").defaultValue(true).build()));
+            patterns.add(g.add(new EnumSetting.Builder<Pattern>().name(n + "-pattern").description("Trim pattern of the " + n + ".").defaultValue(Pattern.Silence).build()));
+            materials.add(g.add(new EnumSetting.Builder<Material>().name(n + "-material").description("Trim material (color) of the " + n + ".").defaultValue(Material.Redstone).build()));
+        }
+    }
+
+    public Setting<Boolean> enabled(int slot) { return on.get(slot); }
+    public Setting<Pattern> pattern(int slot) { return patterns.get(slot); }
+    public Setting<Material> material(int slot) { return materials.get(slot); }
+
     /** True while the preview screen is open, so the trim is shown even if the module is switched off. */
     public boolean previewOpen;
 
-    private ArmorTrim cached;
-    private Pattern cachedPattern;
-    private Material cachedMaterial;
+    private final Map<Integer, ArmorTrim> cache = new HashMap<>();
     private Object cachedWorld;
 
     public ArmorTrimChanger() {
@@ -99,7 +104,7 @@ public class ArmorTrimChanger extends Module {
     @Override
     public WWidget getWidget(GuiTheme theme) {
         WVerticalList list = theme.verticalList();
-        WButton open = list.add(theme.button("Open preview (pick pattern and material)")).expandX().widget();
+        WButton open = list.add(theme.button("Open preview (pick a trim for each armor piece)")).expandX().widget();
         open.action = () -> mc.setScreen(new ArmorTrimScreen(mc.currentScreen, this));
         return list;
     }
@@ -108,35 +113,29 @@ public class ArmorTrimChanger extends Module {
         return isActive() || previewOpen;
     }
 
-    private boolean slotOn(EquipmentSlot slot) {
-        switch (slot) {
-            case HEAD: return helmet.get();
-            case CHEST: return chest.get();
-            case LEGS: return legs.get();
-            case FEET: return boots.get();
-            default: return false;
-        }
-    }
-
-    /** The trim that is picked right now, or null when the world is not ready. */
-    public ArmorTrim trim() {
-        return trim(pattern.get(), material.get());
+    private static int slotIndex(EquipmentSlot slot) {
+        for (int i = 0; i < SLOTS.length; i++) if (SLOTS[i] == slot) return i;
+        return -1;
     }
 
     public ArmorTrim trim(Pattern p, Material m) {
         if (mc.world == null) return null;
-        if (cached != null && cachedPattern == p && cachedMaterial == m && cachedWorld == mc.world) return cached;
+        if (cachedWorld != mc.world) {
+            cache.clear();
+            cachedWorld = mc.world;
+        }
+        int key = p.ordinal() * 64 + m.ordinal();
+        ArmorTrim hit = cache.get(key);
+        if (hit != null) return hit;
         try {
             Optional<RegistryEntry.Reference<ArmorTrimPattern>> pe = mc.world.getRegistryManager().getOrThrow(RegistryKeys.TRIM_PATTERN)
                 .getOptional(RegistryKey.of(RegistryKeys.TRIM_PATTERN, Identifier.ofVanilla(p.id())));
             Optional<RegistryEntry.Reference<ArmorTrimMaterial>> me = mc.world.getRegistryManager().getOrThrow(RegistryKeys.TRIM_MATERIAL)
                 .getOptional(RegistryKey.of(RegistryKeys.TRIM_MATERIAL, Identifier.ofVanilla(m.id())));
             if (pe.isEmpty() || me.isEmpty()) return null;
-            cached = new ArmorTrim(me.get(), pe.get());
-            cachedPattern = p;
-            cachedMaterial = m;
-            cachedWorld = mc.world;
-            return cached;
+            ArmorTrim t = new ArmorTrim(me.get(), pe.get());
+            cache.put(key, t);
+            return t;
         } catch (Throwable t) {
             return null;
         }
@@ -144,7 +143,9 @@ public class ArmorTrimChanger extends Module {
 
     /** Called from the render mixin for every worn piece. Returns the stack to draw (a copy with the trim) or the same stack. */
     public ItemStack modify(LivingEntity entity, EquipmentSlot slot, ItemStack stack) {
-        if (stack == null || stack.isEmpty() || !applies() || !slotOn(slot)) return stack;
+        if (stack == null || stack.isEmpty() || !applies()) return stack;
+        int i = slotIndex(slot);
+        if (i < 0 || !on.get(i).get()) return stack;
         if (entity != mc.player && !(everyone.get() && entity instanceof PlayerEntity)) return stack;
         if (stack.isOf(Items.ELYTRA)) return stack;
 
@@ -152,7 +153,7 @@ public class ArmorTrimChanger extends Module {
         if (eq == null || eq.slot() != slot) return stack;
         if (!replaceExisting.get() && stack.get(DataComponentTypes.TRIM) != null) return stack;
 
-        ArmorTrim t = trim();
+        ArmorTrim t = trim(patterns.get(i).get(), materials.get(i).get());
         if (t == null) return stack;
         ItemStack copy = stack.copy();
         copy.set(DataComponentTypes.TRIM, t);

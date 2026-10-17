@@ -16,8 +16,9 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 
 /**
- * Preview screen like minetrim.com: your own character on the left wearing the picked trim, pieces of armor under it,
- * and the patterns (smithing templates) and materials to click on the right.
+ * Preview screen like minetrim.com: your own character on the left wearing the picked trims, the four armor pieces under
+ * it (click one to edit it), and the patterns (smithing templates) and materials to click on the right.
+ * Every piece of armor has its own pattern and material.
  */
 public class ArmorTrimScreen extends Screen {
     private static final int CELL = 22;
@@ -29,13 +30,16 @@ public class ArmorTrimScreen extends Screen {
         {Items.CHAINMAIL_HELMET, Items.CHAINMAIL_CHESTPLATE, Items.CHAINMAIL_LEGGINGS, Items.CHAINMAIL_BOOTS},
     };
     private static final String[] SET_NAMES = {"Diamond", "Netherite", "Iron", "Gold", "Chainmail"};
+    private static final String[] TAB_NAMES = {"Helmet", "Chest", "Legs", "Boots"};
 
     private final Screen parent;
     private final ArmorTrimChanger module;
     private int set;
+    private int slot = 1; // piece being edited: chestplate first
 
     private int dollX1, dollY1, dollX2, dollY2;
-    private int patX, patY, matX, matY, iconY;
+    private int patX, patY, matX, matY, iconX, iconY;
+    private ButtonWidget[] tabs;
     private final ItemStack[] patIcons = new ItemStack[Pattern.values().length];
     private final ItemStack[] matIcons = new ItemStack[Material.values().length];
 
@@ -57,20 +61,56 @@ public class ArmorTrimScreen extends Screen {
     protected void init() {
         int totalW = 150 + 16 + CELL * 6;
         int left = Math.max(6, (width - totalW) / 2);
-        int top = Math.max(16, (height - 200) / 2);
+        int top = Math.max(16, (height - 215) / 2);
 
         dollX1 = left; dollY1 = top + 10; dollX2 = left + 150; dollY2 = top + 150;
+        iconX = dollX1 + (150 - 4 * 34) / 2;
         iconY = dollY2 + 6;
-        patX = left + 150 + 16; patY = top + 12;
+
+        patX = left + 150 + 16;
+        int tabW = (CELL * 6 - 3 * 2) / 4;
+        tabs = new ButtonWidget[4];
+        for (int i = 0; i < 4; i++) {
+            final int idx = i;
+            tabs[i] = addDrawableChild(ButtonWidget.builder(Text.literal(tabLabel(i)), b -> selectSlot(idx))
+                .dimensions(patX + i * (tabW + 2), top, tabW, 18).build());
+        }
+
+        patY = top + 38;
         matX = patX; matY = patY + CELL * 3 + 22;
 
         int by = matY + CELL * 2 + 12;
         addDrawableChild(ButtonWidget.builder(Text.literal("Armor: " + SET_NAMES[set]), b -> {
             set = (set + 1) % SETS.length;
             b.setMessage(Text.literal("Armor: " + SET_NAMES[set]));
-        }).dimensions(patX, by, CELL * 3 - 2, 20).build());
+        }).dimensions(patX, by, CELL * 2 + 14, 20).build());
+        addDrawableChild(ButtonWidget.builder(Text.literal("Copy to all"), b -> copyToAll())
+            .dimensions(patX + CELL * 2 + 16, by, CELL * 2 + 14, 20).build());
         addDrawableChild(ButtonWidget.builder(Text.literal("Done"), b -> close())
-            .dimensions(patX + CELL * 3 + 2, by, CELL * 3 - 2, 20).build());
+            .dimensions(patX + CELL * 4 + 32, by, CELL * 2 - 4, 20).build());
+    }
+
+    private String tabLabel(int i) {
+        return (i == slot ? "> " : "") + TAB_NAMES[i] + (module.enabled(i).get() ? "" : " (off)");
+    }
+
+    private void selectSlot(int i) {
+        slot = i;
+        refreshTabs();
+    }
+
+    private void refreshTabs() {
+        if (tabs == null) return;
+        for (int i = 0; i < 4; i++) tabs[i].setMessage(Text.literal(tabLabel(i)));
+    }
+
+    private void copyToAll() {
+        Pattern p = module.pattern(slot).get();
+        Material m = module.material(slot).get();
+        for (int i = 0; i < 4; i++) {
+            module.pattern(i).set(p);
+            module.material(i).set(m);
+        }
     }
 
     @Override
@@ -93,11 +133,28 @@ public class ArmorTrimScreen extends Screen {
     @Override
     public boolean mouseClicked(Click click, boolean doubled) {
         if (super.mouseClicked(click, doubled)) return true;
+        double mx = click.x(), my = click.y();
+
+        // click an armor piece under the character to edit it, right click switches that piece on / off
+        for (int i = 0; i < 4; i++) {
+            int x = iconX + i * 34, y = iconY;
+            if (mx >= x && mx < x + 32 && my >= y && my < y + 32) {
+                if (click.button() == 1) {
+                    module.enabled(i).set(!module.enabled(i).get());
+                    slot = i;
+                } else if (click.button() == 0) {
+                    slot = i;
+                }
+                refreshTabs();
+                return true;
+            }
+        }
+
         if (click.button() != 0) return false;
-        int i = hit(click.x(), click.y(), patX, patY, 6, Pattern.values().length);
-        if (i >= 0) { module.pattern.set(Pattern.values()[i]); return true; }
-        i = hit(click.x(), click.y(), matX, matY, 6, Material.values().length);
-        if (i >= 0) { module.material.set(Material.values()[i]); return true; }
+        int i = hit(mx, my, patX, patY, 6, Pattern.values().length);
+        if (i >= 0) { module.pattern(slot).set(Pattern.values()[i]); return true; }
+        i = hit(mx, my, matX, matY, 6, Material.values().length);
+        if (i >= 0) { module.material(slot).set(Material.values()[i]); return true; }
         return false;
     }
 
@@ -112,8 +169,8 @@ public class ArmorTrimScreen extends Screen {
     public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
         super.render(ctx, mouseX, mouseY, delta);
 
-        Pattern curP = module.pattern.get();
-        Material curM = module.material.get();
+        Pattern curP = module.pattern(slot).get();
+        Material curM = module.material(slot).get();
 
         // character
         ctx.fill(dollX1, dollY1, dollX2, dollY2, 0xFF6DB8F5);
@@ -123,31 +180,40 @@ public class ArmorTrimScreen extends Screen {
                 InventoryScreen.drawEntity(ctx, dollX1, dollY1, dollX2, dollY2, 62, 0.0625f, mouseX, mouseY, client.player);
             } catch (Throwable ignored) {
             }
-            if (client.player.getEquippedStack(net.minecraft.entity.EquipmentSlot.CHEST).isEmpty()
-                && client.player.getEquippedStack(net.minecraft.entity.EquipmentSlot.HEAD).isEmpty()
-                && client.player.getEquippedStack(net.minecraft.entity.EquipmentSlot.LEGS).isEmpty()
-                && client.player.getEquippedStack(net.minecraft.entity.EquipmentSlot.FEET).isEmpty()) {
+            boolean bare = true;
+            for (net.minecraft.entity.EquipmentSlot s : ArmorTrimChanger.SLOTS) {
+                if (!client.player.getEquippedStack(s).isEmpty()) bare = false;
+            }
+            if (bare) {
                 ctx.drawCenteredTextWithShadow(textRenderer, "Wear armor to see it on you", (dollX1 + dollX2) / 2, dollY2 - 12, 0xFFFFFFFF);
             }
         }
 
-        // armor pieces with the picked trim (always visible, even without armor on)
-        int ix = dollX1 + (150 - 4 * 34) / 2;
+        // the four armor pieces, each with its own trim (always visible, even without armor on)
         for (int i = 0; i < 4; i++) {
-            ItemStack s = module.icon(SETS[set][i], curP, curM);
+            int x = iconX + i * 34;
+            boolean sel = i == slot;
+            ctx.fill(x - 1, iconY - 1, x + 33, iconY + 33, sel ? 0xFFFFFFFF : 0xFF2C2C3A);
+            ctx.fill(x, iconY, x + 32, iconY + 32, 0xFF3A3A4C);
+            ItemStack s = module.icon(SETS[set][i], module.pattern(i).get(), module.material(i).get());
             ctx.getMatrices().pushMatrix();
-            ctx.getMatrices().translate(ix + i * 34, iconY);
+            ctx.getMatrices().translate(x, iconY);
             ctx.getMatrices().scale(2f, 2f);
             ctx.drawItem(s, 0, 0);
             ctx.getMatrices().popMatrix();
+            if (!module.enabled(i).get()) {
+                ctx.fill(x, iconY, x + 32, iconY + 32, 0xAA000000);
+                ctx.drawCenteredTextWithShadow(textRenderer, "off", x + 16, iconY + 12, 0xFFFF8080);
+            }
         }
+        ctx.drawTextWithShadow(textRenderer, "Click a piece to edit it, right click = on / off", dollX1 - 2, iconY + 37, 0xFFB0B0B0);
 
         // patterns
-        ctx.drawTextWithShadow(textRenderer, "Pattern: " + curP.name(), patX, patY - 11, 0xFFFFFFFF);
+        ctx.drawTextWithShadow(textRenderer, ArmorTrimChanger.SLOT_NAMES[slot] + " pattern: " + curP.name(), patX, patY - 11, 0xFFFFFFFF);
         grid(ctx, patIcons, patX, patY, 6, curP.ordinal(), mouseX, mouseY, Pattern.values());
 
         // materials
-        ctx.drawTextWithShadow(textRenderer, "Material: " + curM.name(), matX, matY - 11, 0xFFFFFFFF);
+        ctx.drawTextWithShadow(textRenderer, ArmorTrimChanger.SLOT_NAMES[slot] + " material: " + curM.name(), matX, matY - 11, 0xFFFFFFFF);
         grid(ctx, matIcons, matX, matY, 6, curM.ordinal(), mouseX, mouseY, Material.values());
     }
 
