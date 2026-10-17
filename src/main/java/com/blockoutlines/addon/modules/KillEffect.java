@@ -19,6 +19,7 @@ import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
+import net.minecraft.block.BlockState;
 import net.minecraft.client.render.Camera;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
@@ -27,6 +28,7 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.network.packet.s2c.play.EntityStatusS2CPacket;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
+import net.minecraft.util.math.BlockPos;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -42,12 +44,17 @@ import java.util.Random;
 public class KillEffect extends Module {
     public enum Shape { Flat, Sphere, Both }
     public enum SparkStyle { Spark, Dot }
+    public enum RingPattern { Smooth, Hatch, Dashed, Pixels }
+    public enum DiscPattern { None, Radar, Grid }
+    public enum SphereStyle { Solid, Wireframe }
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgBolt = settings.createGroup("Lightning");
     private final SettingGroup sgWave = settings.createGroup("Circle");
     private final SettingGroup sgBurst = settings.createGroup("Explosion");
     private final SettingGroup sgEpic = settings.createGroup("Epic extras");
+    private final SettingGroup sgLook = settings.createGroup("Texture");
+    private final SettingGroup sgScorch = settings.createGroup("Scorch marks");
 
     // -------- general
     private final Setting<Boolean> players = sgGeneral.add(new BoolSetting.Builder()
@@ -184,6 +191,43 @@ public class KillEffect extends Module {
     private final Setting<Boolean> boom = sgEpic.add(new BoolSetting.Builder()
         .name("explosion-sound").description("A deep boom at the explosion and a rumble after the thunder.").defaultValue(true).build());
 
+    // -------- texture
+    private final Setting<RingPattern> ringPattern = sgLook.add(new EnumSetting.Builder<RingPattern>()
+        .name("ring-pattern").description("Smooth = plain glow, Hatch = diagonal stripes, Dashed = broken ring, Pixels = flickering pixel blocks.")
+        .defaultValue(RingPattern.Hatch).build());
+    private final Setting<DiscPattern> discPattern = sgLook.add(new EnumSetting.Builder<DiscPattern>()
+        .name("disc-pattern").description("Lines inside the circle: Radar = rings that sweep outward, Grid = rings and spokes.")
+        .defaultValue(DiscPattern.Radar).build());
+    private final Setting<SphereStyle> sphereStyle = sgLook.add(new EnumSetting.Builder<SphereStyle>()
+        .name("ball-style").description("Solid = see-through ball, Wireframe = glowing grid lines.")
+        .defaultValue(SphereStyle.Wireframe).build());
+    private final Setting<Boolean> energyPulses = sgLook.add(new BoolSetting.Builder()
+        .name("energy-pulses").description("Bright pulses run along the lightning and its branches.").defaultValue(true).build());
+    private final Setting<Double> patternSpeed = sgLook.add(new DoubleSetting.Builder()
+        .name("pattern-speed").description("How fast the patterns move.")
+        .defaultValue(1.0).range(0.1, 5.0).sliderRange(0.2, 3.0).build());
+
+    // -------- scorch marks
+    private final Setting<Boolean> scorch = sgScorch.add(new BoolSetting.Builder()
+        .name("scorch-marks").description("The blocks around the spot get a burnt, cracked look for a while (only on your screen).").defaultValue(true).build());
+    private final Setting<Double> scorchRadius = sgScorch.add(new DoubleSetting.Builder()
+        .name("radius").description("Size of the burnt area in blocks.")
+        .defaultValue(5.0).range(1.5, 12.0).sliderRange(2.0, 9.0).visible(scorch::get).build());
+    private final Setting<Integer> scorchTime = sgScorch.add(new IntSetting.Builder()
+        .name("duration").description("How many seconds the marks stay (they fade at the end).")
+        .defaultValue(14).range(2, 120).sliderRange(4, 40).visible(scorch::get).build());
+    private final Setting<Integer> scorchAlpha = sgScorch.add(new IntSetting.Builder()
+        .name("darkness").description("How dark the burnt ground is (0-255).")
+        .defaultValue(215).range(20, 255).sliderRange(60, 255).visible(scorch::get).build());
+    private final Setting<Boolean> cracks = sgScorch.add(new BoolSetting.Builder()
+        .name("glowing-cracks").description("Cracks run out from the middle. They glow at first and cool down.").defaultValue(true).visible(scorch::get).build());
+    private final Setting<SettingColor> scorchColor = sgScorch.add(new ColorSetting.Builder()
+        .name("char-color").description("Color of the burnt ground.")
+        .defaultValue(new SettingColor(22, 18, 16, 255)).visible(scorch::get).build());
+    private final Setting<SettingColor> crackColor = sgScorch.add(new ColorSetting.Builder()
+        .name("crack-color").description("Color of the glowing cracks.")
+        .defaultValue(new SettingColor(255, 120, 35, 255)).visible(() -> scorch.get() && cracks.get()).build());
+
     // -------- state
     private static final class Fx {
         final double x, y, z;
@@ -200,6 +244,18 @@ public class KillEffect extends Module {
         double gMul = 1, dragMul = 1;
     }
 
+    private static final class Scorch {
+        long start;
+        int n;
+        double[] x, y, z;
+        float[] base;      // base opacity 0..1
+        boolean[] crack;
+        float[] heat;      // 1 = glows a lot (middle), 0 = plain
+        Color[] col;
+        int total;         // lifetime ms
+    }
+
+    private final List<Scorch> scorches = new ArrayList<>();
     private final List<Fx> effects = new ArrayList<>();
     private final List<Spark> sparks = new ArrayList<>();
     private final Map<Integer, Long> handled = new HashMap<>();
@@ -216,6 +272,7 @@ public class KillEffect extends Module {
     @Override
     public void onActivate() {
         effects.clear();
+        scorches.clear();
         sparks.clear();
         handled.clear();
         attacked.clear();
@@ -269,7 +326,9 @@ public class KillEffect extends Module {
         }
         if (mc.player.squaredDistanceTo(e) > (double) range.get() * range.get()) return;
 
-        effects.add(new Fx(e.getX(), e.getY(), e.getZ(), now, random.nextLong()));
+        Fx nf = new Fx(e.getX(), e.getY(), e.getZ(), now, random.nextLong());
+        effects.add(nf);
+        if (scorch.get()) buildScorch(nf);
         while (effects.size() > maxEffects.get()) effects.remove(0);
 
         if (bolt.get() && thunder.get() && volume.get() > 0.01) {
@@ -283,7 +342,7 @@ public class KillEffect extends Module {
 
     @EventHandler
     private void onRender3D(Render3DEvent event) {
-        if (effects.isEmpty() && sparks.isEmpty()) return;
+        if (effects.isEmpty() && sparks.isEmpty() && scorches.isEmpty()) return;
         if (mc.gameRenderer == null) return;
 
         Camera cam = mc.gameRenderer.getCamera();
@@ -296,6 +355,8 @@ public class KillEffect extends Module {
         Renderer3D r = throughWalls.get() ? event.renderer : event.depthRenderer;
         long now = System.currentTimeMillis();
         double dt = Math.min(0.1, event.frameTime);
+
+        drawScorches(event.depthRenderer, now);
 
         long grow = growTime.get(), shrink = shrinkTime.get();
         long collapseEnd = wave.get() ? grow + shrink : 0;
@@ -406,11 +467,20 @@ public class KillEffect extends Module {
 
     /** A strip that always faces the camera along a list of points. */
     private void ribbon(Renderer3D r, double[] x, double[] y, double[] z, int n, double width, SettingColor col, int alpha) {
+        ribbonRGB(r, x, y, z, n, width, col.r, col.g, col.b, alpha, energyPulses.get());
+    }
+
+    private void ribbonRGB(Renderer3D r, double[] x, double[] y, double[] z, int n, double width, int cr, int cg, int cb, int alpha, boolean pulse) {
         if (alpha <= 0) return;
-        Color c = new Color(col.r, col.g, col.b, Math.max(0, Math.min(255, alpha)));
-        Color edge = new Color(col.r, col.g, col.b, 0);
+        alpha = Math.min(255, alpha);
+        double phase = System.nanoTime() / 1.0e9 * patternSpeed.get() * 11.0;
+        Color[] mid = new Color[n];
+        Color[] edge = new Color[n];
         double[] sx = new double[n], sy = new double[n], sz = new double[n];
         for (int i = 0; i < n; i++) {
+            double m = pulse ? 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(i * 1.15 - phase)) : 1.0;
+            mid[i] = new Color(cr, cg, cb, (int) (alpha * m));
+            edge[i] = new Color(cr, cg, cb, 0);
             int a = Math.max(0, i - 1), b = Math.min(n - 1, i + 1);
             double dx = x[b] - x[a], dy = y[b] - y[a], dz = z[b] - z[a];
             // sideways = direction x camera forward
@@ -421,8 +491,8 @@ public class KillEffect extends Module {
         for (int i = 0; i < n - 1; i++) {
             int j = i + 1;
             // middle of the ribbon is solid, the two edges are clear: soft glow look
-            quad(r, x[i] - sx[i], y[i] - sy[i], z[i] - sz[i], x[i], y[i], z[i], x[j], y[j], z[j], x[j] - sx[j], y[j] - sy[j], z[j] - sz[j], edge, c, c, edge);
-            quad(r, x[i], y[i], z[i], x[i] + sx[i], y[i] + sy[i], z[i] + sz[i], x[j] + sx[j], y[j] + sy[j], z[j] + sz[j], x[j], y[j], z[j], c, edge, edge, c);
+            quad(r, x[i] - sx[i], y[i] - sy[i], z[i] - sz[i], x[i], y[i], z[i], x[j], y[j], z[j], x[j] - sx[j], y[j] - sy[j], z[j] - sz[j], edge[i], mid[i], mid[j], edge[j]);
+            quad(r, x[i], y[i], z[i], x[i] + sx[i], y[i] + sy[i], z[i] + sz[i], x[j] + sx[j], y[j] + sy[j], z[j] + sz[j], x[j], y[j], z[j], mid[i], edge[i], edge[j], mid[j]);
         }
     }
 
@@ -485,25 +555,57 @@ public class KillEffect extends Module {
             flatRing(r, f.x, y + 0.02, f.z, rad * 0.33, Math.min(ringWidth.get() * 0.4, rad * 0.33), (int) (alpha * 0.7), seconds + 0.4);
             energyWall(r, f.x, y, f.z, rad, Math.min(2.2, 0.5 + rad * 0.18), (int) (alpha * 0.28), seconds);
         }
+        if (flat) drawDiscPattern(r, f, y + 0.015, rad, alpha, seconds);
         if (flat && runes.get()) drawRunes(r, f, y + 0.03, rad, alpha, age);
         if (flat && arcs.get() && age < grow) drawEdgeArcs(r, f, y, rad, age);
     }
 
+    private static double hash(int a, int b, int c) {
+        long h = a * 0x9E3779B97F4A7C15L ^ (b * 0xC2B2AE3D27D4EB4FL) ^ (c * 0x165667B19E3779F9L);
+        h ^= h >>> 29; h *= 0xBF58476D1CE4E5B9L; h ^= h >>> 32;
+        return (h & 0xFFFFFFL) / (double) 0x1000000;
+    }
+
+    /** How strong one cell of the ring is (1 = full) for the picked pattern. */
+    private double patternMul(int i, int row, int tick) {
+        switch (ringPattern.get()) {
+            case Hatch: return ((i + row * 2 + tick) & 3) < 2 ? 1.0 : 0.12;
+            case Dashed: return ((i + tick / 2) & 3) < 3 ? 1.0 : 0.0;
+            case Pixels: {
+                double h = hash(i, row, tick / 2);
+                return h < 0.3 ? 0.05 : 0.4 + 0.6 * h;
+            }
+            default: return 1.0;
+        }
+    }
+
     private void flatRing(Renderer3D r, double x, double y, double z, double rad, double width, int alpha, double seconds) {
-        int n = 64;
+        int n = Math.max(16, Math.min(72, ((int) (rad * 14) / 4) * 4));
+        final int rows = 3;
         double inner = Math.max(0.01, rad - width);
+        int tick = (int) (seconds * patternSpeed.get() * 6);
         for (int i = 0; i < n; i++) {
             double a0 = Math.PI * 2 * i / n, a1 = Math.PI * 2 * (i + 1) / n;
             double c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
             double hue = i / (double) n;
-            Color outer = waveColor(1.0, alpha, seconds, hue);
-            Color in = waveColor(0.0, 0, seconds, hue); // inner side fades out: glowing band
-            quad(r, x + c0 * rad, y, z + s0 * rad, x + c1 * rad, y, z + s1 * rad, x + c1 * inner, y, z + s1 * inner, x + c0 * inner, y, z + s0 * inner, outer, outer, in, in);
+            for (int row = 0; row < rows; row++) {
+                double ra = inner + (rad - inner) * row / rows, rb = inner + (rad - inner) * (row + 1) / rows;
+                double mul = patternMul(i, row, tick);
+                if (mul <= 0.01) continue;
+                // the inner side fades out so the band glows; the pattern multiplies on top
+                Color ci = waveColor(row / (double) rows, (int) (alpha * (row / (double) rows) * mul), seconds, hue);
+                Color co = waveColor((row + 1) / (double) rows, (int) (alpha * ((row + 1) / (double) rows) * mul), seconds, hue);
+                quad(r, x + c0 * rb, y, z + s0 * rb, x + c1 * rb, y, z + s1 * rb, x + c1 * ra, y, z + s1 * ra, x + c0 * ra, y, z + s0 * ra, co, co, ci, ci);
+            }
         }
     }
 
     private void sphere(Renderer3D r, double x, double y, double z, double rad, int alpha, double seconds) {
         if (alpha <= 0) return;
+        if (sphereStyle.get() == SphereStyle.Wireframe) {
+            wireSphere(r, x, y, z, rad, alpha, seconds);
+            alpha = alpha / 3; // faint fill under the lines
+        }
         int lat = 10, lon = 24;
         for (int i = 0; i < lat; i++) {
             double p0 = Math.PI * (-0.5 + i / (double) lat), p1 = Math.PI * (-0.5 + (i + 1) / (double) lat);
@@ -516,6 +618,199 @@ public class KillEffect extends Module {
                     x + Math.cos(a1) * r0, y + y0, z + Math.sin(a1) * r0,
                     x + Math.cos(a1) * r1, y + y1, z + Math.sin(a1) * r1,
                     x + Math.cos(a0) * r1, y + y1, z + Math.sin(a0) * r1, ca, ca, cb, cb);
+            }
+        }
+    }
+
+    /** Glowing grid lines (latitudes and meridians) instead of a solid ball. */
+    private void wireSphere(Renderer3D r, double x, double y, double z, double rad, int alpha, double seconds) {
+        int lat = 10, lon = 12, seg = 28;
+        double lw = 0.05 + rad * 0.007;
+        double[] px = new double[seg + 1], py = new double[seg + 1], pz = new double[seg + 1];
+        int la = Math.min(255, alpha * 3);
+        for (int i = 1; i < lat; i++) {
+            double p = Math.PI * (-0.5 + i / (double) lat);
+            double yy = Math.sin(p) * rad, rr = Math.cos(p) * rad;
+            for (int k = 0; k <= seg; k++) {
+                double a = Math.PI * 2 * k / seg + seconds * 0.25 * (i % 2 == 0 ? 1 : -1);
+                px[k] = x + Math.cos(a) * rr; py[k] = y + yy; pz[k] = z + Math.sin(a) * rr;
+            }
+            Color c = waveColor(i / (double) lat, 255, seconds, i / (double) lat);
+            ribbonRGB(r, px, py, pz, seg + 1, lw, c.r, c.g, c.b, la, false);
+        }
+        double[] mx = new double[lat + 1], my = new double[lat + 1], mz = new double[lat + 1];
+        for (int j = 0; j < lon; j++) {
+            double a = Math.PI * 2 * j / lon + seconds * 0.18;
+            for (int k = 0; k <= lat; k++) {
+                double p = Math.PI * (-0.5 + k / (double) lat);
+                mx[k] = x + Math.cos(a) * Math.cos(p) * rad; my[k] = y + Math.sin(p) * rad; mz[k] = z + Math.sin(a) * Math.cos(p) * rad;
+            }
+            Color c = waveColor(0.5, 255, seconds, j / (double) lon);
+            ribbonRGB(r, mx, my, mz, lat + 1, lw, c.r, c.g, c.b, la, false);
+        }
+    }
+
+    /** Rings that sweep outward and, for Grid, spokes: a radar / tech look inside the circle. */
+    private void drawDiscPattern(Renderer3D r, Fx f, double y, double rad, int alpha, double seconds) {
+        DiscPattern dp = discPattern.get();
+        if (dp == DiscPattern.None || rad < 0.6) return;
+        double w = 0.05 + rad * 0.004;
+        double step = Math.max(1.0, rad / 6.0);
+        double sweep = (seconds * patternSpeed.get() * 1.6) % 1.0;
+        int rings = (int) Math.ceil(rad / step) + 1;
+        for (int k = 0; k < rings; k++) {
+            double rr = (k + sweep) * step;
+            if (rr >= rad - 0.15 || rr < 0.2) continue;
+            int a = (int) (alpha * 0.55 * (1.0 - rr / rad));
+            Color c = waveColor(rr / rad, a, seconds, 0.2);
+            int n = Math.max(16, Math.min(64, (int) (rr * 10)));
+            for (int i = 0; i < n; i++) {
+                double a0 = Math.PI * 2 * i / n, a1 = Math.PI * 2 * (i + 1) / n;
+                groundLine(r, f.x + Math.cos(a0) * rr, f.z + Math.sin(a0) * rr, f.x + Math.cos(a1) * rr, f.z + Math.sin(a1) * rr, y, w, c);
+            }
+        }
+        if (dp == DiscPattern.Grid) {
+            double spin = seconds * 0.15;
+            Color c = waveColor(0.4, (int) (alpha * 0.4), seconds, 0.5);
+            for (int k = 0; k < 16; k++) {
+                double a = spin + Math.PI * 2 * k / 16;
+                groundLine(r, f.x + Math.cos(a) * 0.3, f.z + Math.sin(a) * 0.3, f.x + Math.cos(a) * rad * 0.96, f.z + Math.sin(a) * rad * 0.96, y, w, c);
+            }
+        }
+    }
+
+    // ---- scorch marks (burnt ground made of little pixels)
+
+    private double surfaceY(int bx, int bz, int fy) {
+        BlockPos.Mutable p = new BlockPos.Mutable();
+        for (int yy = fy + 1; yy >= fy - 4; yy--) {
+            p.set(bx, yy, bz);
+            BlockState st = mc.world.getBlockState(p);
+            if (!st.isSolidBlock(mc.world, p)) continue;
+            p.set(bx, yy + 1, bz);
+            BlockState above = mc.world.getBlockState(p);
+            if (above.isSolidBlock(mc.world, p) || !above.getFluidState().isEmpty()) return Double.NaN;
+            return yy + 1;
+        }
+        return Double.NaN;
+    }
+
+    private void buildScorch(Fx f) {
+        if (mc.world == null) return;
+        final int PX = 4; // pixels per block side
+        double R = scorchRadius.get();
+        int fy = (int) Math.floor(f.y);
+        int x0 = (int) Math.floor(f.x - R), x1 = (int) Math.floor(f.x + R);
+        int z0 = (int) Math.floor(f.z - R), z1 = (int) Math.floor(f.z + R);
+        Random rnd = new Random(f.seed ^ 0x5DEECE66DL);
+
+        // cracks: random walks that start in the middle, remembered as pixel cells
+        java.util.Set<Long> crackCells = new java.util.HashSet<>();
+        if (cracks.get()) {
+            int nc = 6 + rnd.nextInt(4);
+            for (int c = 0; c < nc; c++) {
+                double a = rnd.nextDouble() * Math.PI * 2;
+                double px = f.x, pz = f.z;
+                double len = R * (0.55 + 0.45 * rnd.nextDouble());
+                int steps = (int) (len / 0.2);
+                for (int st = 0; st < steps; st++) {
+                    a += (rnd.nextDouble() - 0.5) * 0.7;
+                    px += Math.cos(a) * 0.2; pz += Math.sin(a) * 0.2;
+                    crackCells.add(((long) Math.floor(px * PX) << 32) ^ ((long) Math.floor(pz * PX) & 0xFFFFFFFFL));
+                    if (st > 4 && rnd.nextDouble() < 0.06 && steps - st > 6) {
+                        // a short side crack
+                        double ba = a + (rnd.nextBoolean() ? 1 : -1) * (0.6 + rnd.nextDouble() * 0.6);
+                        double bx = px, bz = pz;
+                        for (int q = 0; q < 6; q++) {
+                            ba += (rnd.nextDouble() - 0.5) * 0.7;
+                            bx += Math.cos(ba) * 0.2; bz += Math.sin(ba) * 0.2;
+                            crackCells.add(((long) Math.floor(bx * PX) << 32) ^ ((long) Math.floor(bz * PX) & 0xFFFFFFFFL));
+                        }
+                    }
+                }
+            }
+        }
+
+        List<double[]> pix = new ArrayList<>(); // x, y, z, base, crack(0/1), heat
+        for (int bx = x0; bx <= x1; bx++) {
+            for (int bz = z0; bz <= z1; bz++) {
+                double sy = surfaceY(bx, bz, fy);
+                if (Double.isNaN(sy)) continue;
+                for (int i = 0; i < PX; i++) {
+                    for (int j = 0; j < PX; j++) {
+                        double cx = bx + (i + 0.5) / PX, cz = bz + (j + 0.5) / PX;
+                        double dx = cx - f.x, dz = cz - f.z;
+                        double d = Math.sqrt(dx * dx + dz * dz) / R;
+                        int gi = bx * PX + i, gj = bz * PX + j;
+                        double n1 = hash(gi, gj, 17), n2 = hash(gi, gj, 91);
+                        boolean isCrack = crackCells.contains(((long) gi << 32) ^ (gj & 0xFFFFFFFFL));
+                        if (!isCrack && d + (n1 - 0.5) * 0.55 > 1.0) continue;
+                        if (isCrack && d > 1.05) continue;
+                        double base = isCrack ? 1.0 : Math.pow(Math.max(0, 1.0 - d), 0.7) * (0.55 + 0.45 * n2);
+                        double heat = isCrack ? Math.max(0.35, 1.0 - d) : (d < 0.16 ? 1.0 - d / 0.16 : 0);
+                        pix.add(new double[]{cx, sy + 0.02, cz, base, isCrack ? 1 : 0, heat, n1});
+                    }
+                }
+            }
+        }
+        if (pix.isEmpty()) return;
+        if (pix.size() > 9000) pix = pix.subList(0, 9000);
+
+        Scorch sc = new Scorch();
+        sc.start = System.currentTimeMillis();
+        sc.total = scorchTime.get() * 1000;
+        sc.n = pix.size();
+        sc.x = new double[sc.n]; sc.y = new double[sc.n]; sc.z = new double[sc.n];
+        sc.base = new float[sc.n]; sc.crack = new boolean[sc.n]; sc.heat = new float[sc.n]; sc.col = new Color[sc.n];
+        SettingColor ch = scorchColor.get();
+        for (int i = 0; i < sc.n; i++) {
+            double[] p = pix.get(i);
+            sc.x[i] = p[0]; sc.y[i] = p[1]; sc.z[i] = p[2];
+            sc.base[i] = (float) p[3]; sc.crack[i] = p[4] > 0; sc.heat[i] = (float) p[5];
+            double v = (p[6] - 0.5) * 22; // little brightness changes so the char is not flat
+            boolean ash = p[6] > 0.93;     // a few light ash pixels
+            int rr = (int) (ch.r + v + (ash ? 38 : 0)), gg = (int) (ch.g + v + (ash ? 36 : 0)), bb = (int) (ch.b + v + (ash ? 34 : 0));
+            sc.col[i] = new Color(Math.max(0, Math.min(255, rr)), Math.max(0, Math.min(255, gg)), Math.max(0, Math.min(255, bb)), 255);
+        }
+        scorches.add(sc);
+        while (scorches.size() > 6) scorches.remove(0);
+    }
+
+    private void drawScorches(Renderer3D r, long now) {
+        if (scorches.isEmpty()) return;
+        SettingColor glowC = crackColor.get();
+        double dark = scorchAlpha.get() / 255.0;
+        final double h = 0.125;
+        for (int si = scorches.size() - 1; si >= 0; si--) {
+            Scorch sc = scorches.get(si);
+            double age = now - sc.start;
+            if (age >= sc.total) { scorches.remove(si); continue; }
+            // marks appear fast, stay, then fade over the last 40 percent
+            double appear = Math.min(1.0, age / 350.0);
+            double fade = age < sc.total * 0.6 ? 1.0 : 1.0 - (age - sc.total * 0.6) / (sc.total * 0.4);
+            double cool = Math.max(0.0, 1.0 - age / 4500.0); // glow cools down in 4.5 seconds
+            double flick = 0.85 + 0.15 * Math.sin(age * 0.012);
+            for (int i = 0; i < sc.n; i++) {
+                Color c = sc.col[i];
+                double a = sc.base[i] * dark * appear * fade;
+                int cr = c.r, cg = c.g, cb = c.b;
+                double heat = sc.heat[i] * cool * flick;
+                if (heat > 0.02) {
+                    double k = Math.min(1.0, heat);
+                    if (sc.crack[i]) {
+                        cr = (int) (35 + (glowC.r - 35) * k); cg = (int) (10 + (glowC.g - 10) * k); cb = (int) (8 + (glowC.b - 8) * k);
+                        a = Math.max(a, 0.95 * appear * fade);
+                    } else {
+                        cr = (int) (cr + (glowC.r - cr) * k * 0.7); cg = (int) (cg + (glowC.g - cg) * k * 0.55); cb = (int) (cb + (glowC.b - cb) * k * 0.3);
+                    }
+                } else if (sc.crack[i]) {
+                    cr = 28; cg = 10; cb = 8;
+                    a = Math.max(a, 0.9 * appear * fade);
+                }
+                int ia = (int) Math.max(0, Math.min(255, a * 255));
+                if (ia <= 2) continue;
+                c.set(cr, cg, cb, ia);
+                quad(r, sc.x[i] - h, sc.y[i], sc.z[i] - h, sc.x[i] + h, sc.y[i], sc.z[i] - h, sc.x[i] + h, sc.y[i], sc.z[i] + h, sc.x[i] - h, sc.y[i], sc.z[i] + h, c, c, c, c);
             }
         }
     }
