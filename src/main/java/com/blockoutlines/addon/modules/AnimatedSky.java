@@ -60,7 +60,7 @@ public class AnimatedSky extends Module {
     private final Map<Setting<?>, Object> saved = new HashMap<>();
 
     public AnimatedSky() {
-        super(BlockOutlinesAddon.COSMETICS, "animated-sky", "Flowing sky colors (drives Meteor's Ambience, visual only).");
+        super(BlockOutlinesAddon.SKY, "animated-sky", "Flowing sky colors (drives Meteor's Ambience, visual only).");
     }
 
     @Override

@@ -47,7 +47,7 @@ public class ColorGrading extends Module {
     );
 
     public ColorGrading() {
-        super(BlockOutlinesAddon.CATEGORY, "color-grading", "Changes saturation, contrast and brightness of the game world without touching the GUI.");
+        super(BlockOutlinesAddon.SKY, "color-grading", "Changes saturation, contrast and brightness of the game world without touching the GUI.");
     }
 
     @Override

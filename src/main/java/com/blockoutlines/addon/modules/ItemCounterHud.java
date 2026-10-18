@@ -145,7 +145,7 @@ public class ItemCounterHud extends Module {
     private double grabX, grabY;
 
     public ItemCounterHud() {
-        super(BlockOutlinesAddon.COSMETICS, "item-counter-hud", "A panel next to the hotbar showing how many totems, crystals, obsidian ... you carry.");
+        super(BlockOutlinesAddon.CATEGORY, "item-counter-hud", "A panel next to the hotbar showing how many totems, crystals, obsidian ... you carry.");
     }
 
     @Override

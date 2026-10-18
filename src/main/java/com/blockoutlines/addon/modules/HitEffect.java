@@ -161,7 +161,7 @@ public class HitEffect extends Module {
     private double rx, ry, rz, ux, uy, uz;
 
     public HitEffect() {
-        super(BlockOutlinesAddon.COSMETICS, "hit-effect",
+        super(BlockOutlinesAddon.COMBAT, "hit-effect",
             "A damage number (like -1.6) floats out of whoever you hit, with a burst of colored pixels.");
     }
 

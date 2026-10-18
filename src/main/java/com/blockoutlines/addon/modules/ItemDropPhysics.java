@@ -89,7 +89,7 @@ public class ItemDropPhysics extends Module {
     private int sweep;
 
     public ItemDropPhysics() {
-        super(BlockOutlinesAddon.CATEGORY, "item-drop-physics",
+        super(BlockOutlinesAddon.EFFECTS, "item-drop-physics",
             "Dropped items tumble, hop, wobble and settle like real objects. Turn Meteor's own item-physics off when you use this.");
     }
 

@@ -122,7 +122,7 @@ public class FakeElytra extends Module {
     private boolean firstFrameScan;
 
     public FakeElytra() {
-        super(BlockOutlinesAddon.CATEGORY, "fake-elytra", "Shows the item in your hand as an elytra (visual only, client side).");
+        super(BlockOutlinesAddon.COSMETICS, "fake-elytra", "Shows the item in your hand as an elytra (visual only, client side).");
     }
 
     @Override

@@ -98,7 +98,7 @@ public class ArmorTrimChanger extends Module {
     private Object cachedWorld;
 
     public ArmorTrimChanger() {
-        super(BlockOutlinesAddon.CATEGORY, "armor-trim-changer", "Shows any armor trim on your armor (client side only), with a preview screen.");
+        super(BlockOutlinesAddon.COSMETICS, "armor-trim-changer", "Shows any armor trim on your armor (client side only), with a preview screen.");
     }
 
     @Override

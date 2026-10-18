@@ -156,7 +156,7 @@ public class JumpCircle extends Module {
     private int lastSpawnAge = -100;
 
     public JumpCircle() {
-        super(BlockOutlinesAddon.COSMETICS, "jump-circle", "A ring (with a text inside) grows under your feet every time you jump.");
+        super(BlockOutlinesAddon.EFFECTS, "jump-circle", "A ring (with a text inside) grows under your feet every time you jump.");
     }
 
     @Override

@@ -96,7 +96,7 @@ public class ProjectileTrails extends Module {
     private double fx, fy, fz, rx, ry, rz, ux, uy, uz, camX, camY, camZ;
 
     public ProjectileTrails() {
-        super(BlockOutlinesAddon.COSMETICS, "projectile-trails",
+        super(BlockOutlinesAddon.EFFECTS, "projectile-trails",
             "A glowing pulse ribbon behind arrows, tridents, ender pearls and fireworks.");
     }
 

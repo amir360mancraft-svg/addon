@@ -147,7 +147,7 @@ public class TargetHud extends Module {
     private double grabX, grabY;
 
     public TargetHud() {
-        super(BlockOutlinesAddon.COSMETICS, "target-hud", "Shows you - and when you look at a player, his name, ping, health, armor and totem pops.");
+        super(BlockOutlinesAddon.COMBAT, "target-hud", "Shows you - and when you look at a player, his name, ping, health, armor and totem pops.");
     }
 
     @Override

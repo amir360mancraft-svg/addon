@@ -266,7 +266,7 @@ public class KillEffect extends Module {
     private double fx, fy, fz, rx, ry, rz, ux, uy, uz;
 
     public KillEffect() {
-        super(BlockOutlinesAddon.COSMETICS, "kill-effect", "Lightning, a huge circle that collapses and an explosion of sparks whenever someone dies.");
+        super(BlockOutlinesAddon.COMBAT, "kill-effect", "Lightning, a huge circle that collapses and an explosion of sparks whenever someone dies.");
     }
 
     @Override

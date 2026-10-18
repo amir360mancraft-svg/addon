@@ -42,12 +42,18 @@ public class BlockOutlinesAddon extends MeteorAddon {
     public static final Category CATEGORY = new Category("Better Render");
     public static final Category HUNTING = new Category("Base Hunting");
     public static final Category COSMETICS = new Category("Cosmetics");
+    public static final Category COMBAT = new Category("Combat FX");
+    public static final Category EFFECTS = new Category("Effects");
+    public static final Category SKY = new Category("Sky & Color");
 
     @Override
     public void onRegisterCategories() {
         Modules.registerCategory(CATEGORY);
         Modules.registerCategory(HUNTING);
         Modules.registerCategory(COSMETICS);
+        Modules.registerCategory(COMBAT);
+        Modules.registerCategory(EFFECTS);
+        Modules.registerCategory(SKY);
     }
 
     @Override

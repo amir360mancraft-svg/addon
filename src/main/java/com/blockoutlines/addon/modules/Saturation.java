@@ -28,7 +28,7 @@ public class Saturation extends Module {
     );
 
     public Saturation() {
-        super(BlockOutlinesAddon.CATEGORY, "saturation", "Changes the color saturation of the game world without touching the GUI.");
+        super(BlockOutlinesAddon.SKY, "saturation", "Changes the color saturation of the game world without touching the GUI.");
     }
 
     @Override

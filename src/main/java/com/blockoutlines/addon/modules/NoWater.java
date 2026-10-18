@@ -6,7 +6,7 @@ import meteordevelopment.meteorclient.systems.modules.Module;
 /** Stops rendering water (also waterlogged blocks). Water stays in the world, you just can't see it. */
 public class NoWater extends Module {
     public NoWater() {
-        super(BlockOutlinesAddon.CATEGORY, "no-water", "Stops rendering water so you can see through it.");
+        super(BlockOutlinesAddon.SKY, "no-water", "Stops rendering water so you can see through it.");
     }
 
     @Override

@@ -67,7 +67,7 @@ public class AutoTrident extends Module {
     private boolean pressing;
 
     public AutoTrident() {
-        super(BlockOutlinesAddon.CATEGORY, "auto-trident",
+        super(BlockOutlinesAddon.COMBAT, "auto-trident",
             "Hold right click in rain or water with a Riptide trident and it charges and launches you over and over, with a bit of randomness.");
     }
 

@@ -154,7 +154,7 @@ public class PlayerTrail extends Module {
     private double camX, camY, camZ;
 
     public PlayerTrail() {
-        super(BlockOutlinesAddon.CATEGORY, "player-trail",
+        super(BlockOutlinesAddon.EFFECTS, "player-trail",
             "A colored trail behind you: pixels while walking, a glowing pulse ribbon while gliding with an elytra.");
     }
 

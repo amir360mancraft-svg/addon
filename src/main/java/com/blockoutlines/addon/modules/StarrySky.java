@@ -519,7 +519,7 @@ public class StarrySky extends Module {
     private final Color[] ringCols = {new Color(), new Color(), new Color(), new Color(), new Color()};
 
     public StarrySky() {
-        super(BlockOutlinesAddon.COSMETICS, "starry-sky", "A prettier sky: drifting sky color, bluish haze, swirling clouds, twinkling stars and shooting stars.");
+        super(BlockOutlinesAddon.SKY, "starry-sky", "A prettier sky: drifting sky color, bluish haze, swirling clouds, twinkling stars and shooting stars.");
     }
 
     @Override
