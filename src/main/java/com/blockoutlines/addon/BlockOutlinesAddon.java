@@ -3,6 +3,7 @@ package com.blockoutlines.addon;
 import com.blockoutlines.addon.modules.AmethystFinder;
 import com.blockoutlines.addon.modules.AnimatedSky;
 import com.blockoutlines.addon.modules.ArmorTrimChanger;
+import com.blockoutlines.addon.modules.AutoTrident;
 import com.blockoutlines.addon.modules.BaseFinder;
 import com.blockoutlines.addon.modules.BlockOutlines;
 import com.blockoutlines.addon.modules.ChinaHat;
@@ -23,6 +24,7 @@ import com.blockoutlines.addon.modules.Pets;
 import com.blockoutlines.addon.modules.RegionMap;
 import com.blockoutlines.addon.modules.PlayerSigns;
 import com.blockoutlines.addon.modules.PlayerTrail;
+import com.blockoutlines.addon.modules.ProjectileTrails;
 import com.blockoutlines.addon.modules.Saturation;
 import com.blockoutlines.addon.modules.StarrySky;
 import com.blockoutlines.addon.modules.SusChunk;
@@ -78,6 +80,8 @@ public class BlockOutlinesAddon extends MeteorAddon {
         Modules.get().add(new KillEffect());
         Modules.get().add(new PlayerTrail());
         Modules.get().add(new HitEffect());
+        Modules.get().add(new ProjectileTrails());
+        Modules.get().add(new AutoTrident());
         LOG.info("Better Render loaded");
     }
 
