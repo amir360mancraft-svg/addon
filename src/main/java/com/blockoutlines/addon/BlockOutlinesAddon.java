@@ -74,6 +74,7 @@ public class BlockOutlinesAddon extends MeteorAddon {
         Modules.get().add(new ItemDropPhysics());
         Modules.get().add(new ArmorTrimChanger());
         Modules.get().add(new KillEffect());
+        Modules.get().add(new PlayerTrail());
         LOG.info("Better Render loaded");
     }
 
