@@ -14,6 +14,7 @@ import com.blockoutlines.addon.modules.NetheriteFinder;
 import com.blockoutlines.addon.modules.OgChunkFinder;
 import com.blockoutlines.addon.modules.CustomCape;
 import com.blockoutlines.addon.modules.CustomGlint;
+import com.blockoutlines.addon.modules.HitEffect;
 import com.blockoutlines.addon.modules.ItemCounterHud;
 import com.blockoutlines.addon.modules.ItemDropPhysics;
 import com.blockoutlines.addon.modules.JumpCircle;
@@ -76,6 +77,7 @@ public class BlockOutlinesAddon extends MeteorAddon {
         Modules.get().add(new ArmorTrimChanger());
         Modules.get().add(new KillEffect());
         Modules.get().add(new PlayerTrail());
+        Modules.get().add(new HitEffect());
         LOG.info("Better Render loaded");
     }
 
