@@ -21,6 +21,7 @@ import com.blockoutlines.addon.modules.KillEffect;
 import com.blockoutlines.addon.modules.Pets;
 import com.blockoutlines.addon.modules.RegionMap;
 import com.blockoutlines.addon.modules.PlayerSigns;
+import com.blockoutlines.addon.modules.PlayerTrail;
 import com.blockoutlines.addon.modules.Saturation;
 import com.blockoutlines.addon.modules.StarrySky;
 import com.blockoutlines.addon.modules.SusChunk;
