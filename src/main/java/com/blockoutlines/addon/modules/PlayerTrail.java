@@ -52,6 +52,9 @@ public class PlayerTrail extends Module {
         .defaultValue(40).range(8, 128).sliderRange(8, 100).visible(others::get).build());
     private final Setting<Boolean> throughWalls = sgGeneral.add(new BoolSetting.Builder()
         .name("through-walls").description("Draw the trail even when blocks are in front of it.").defaultValue(false).build());
+    private final Setting<Double> camFade = sgGeneral.add(new DoubleSetting.Builder()
+        .name("camera-fade").description("Parts of the trail closer than this to your camera fade out, so they never cover your view (blocks).")
+        .defaultValue(3.5).range(0.0, 10.0).sliderRange(0.0, 8.0).build());
     private final Setting<Boolean> inAir = sgGeneral.add(new BoolSetting.Builder()
         .name("while-jumping").description("Keep leaving pixels while you are in the air (not gliding).").defaultValue(true).build());
 
@@ -148,6 +151,7 @@ public class PlayerTrail extends Module {
 
     // camera frame (set every frame)
     private double fx, fy, fz, rx, ry, rz, ux, uy, uz;
+    private double camX, camY, camZ;
 
     public PlayerTrail() {
         super(BlockOutlinesAddon.CATEGORY, "player-trail",
@@ -262,6 +266,7 @@ public class PlayerTrail extends Module {
         rx = -fz / rl; ry = 0; rz = fx / rl;
         ux = ry * fz - rz * fy; uy = rz * fx - rx * fz; uz = rx * fy - ry * fx;
 
+        camX = event.offsetX; camY = event.offsetY; camZ = event.offsetZ;
         Renderer3D r = throughWalls.get() ? event.renderer : event.depthRenderer;
         long now = System.currentTimeMillis();
         double dt = Math.min(0.1, event.frameTime);
@@ -297,7 +302,7 @@ public class PlayerTrail extends Module {
 
             double fade = Math.pow(1.0 - u, 1.1) * Math.min(1.0, u * 12.0 + 0.25);
             if (twinkle.get()) fade *= 0.75 + 0.25 * Math.sin(secs * 14.0 + p.phase);
-            int alpha = (int) (op * Math.max(0, Math.min(1, fade)));
+            int alpha = (int) (op * Math.max(0, Math.min(1, fade)) * nearFade(p.x, p.y, p.z));
             if (alpha <= 2) continue;
 
             double s = p.size * 0.5 * (shrink.get() ? 0.35 + 0.65 * (1.0 - u) : 1.0);
@@ -312,6 +317,16 @@ public class PlayerTrail extends Module {
             }
             square(r, x, y, z, s, p.flat, c);
         }
+    }
+
+    /** 0 right at the camera, 1 once the point is camera-fade blocks away. */
+    private double nearFade(double x, double y, double z) {
+        double d = camFade.get();
+        if (d <= 0.01) return 1.0;
+        double dx = x - camX, dy = y - camY, dz = z - camZ;
+        double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        double t = Math.max(0.0, Math.min(1.0, (dist - d * 0.3) / (d * 0.7)));
+        return t * t * (3 - 2 * t);
     }
 
     private Color color(double u, float hue, double secs, int alpha) {
@@ -376,7 +391,7 @@ public class PlayerTrail extends Module {
         for (int i = 0; i < n; i++) {
             double u = age[i];
             double m = pulse.get() ? 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(i * 0.75 - phase)) : 1.0;
-            int a = (int) (op * Math.pow(1.0 - u, 0.9) * m);
+            int a = (int) (op * Math.pow(1.0 - u, 0.9) * m * nearFade(x[i], y[i], z[i]));
             Color c = color(u, 0f, secs, Math.max(0, Math.min(255, a)));
             mid[i] = c;
             edge[i] = new Color(c.r, c.g, c.b, 0);
@@ -396,7 +411,7 @@ public class PlayerTrail extends Module {
     }
 
     private void glow(Renderer3D r, double x, double y, double z, double rad, double secs) {
-        Color c = color(0, 0f, secs, Math.min(255, opacity.get()));
+        Color c = color(0, 0f, secs, (int) Math.min(255, opacity.get() * nearFade(x, y, z)));
         Color z0 = new Color(c.r, c.g, c.b, 0);
         rad *= 0.85 + 0.15 * Math.sin(secs * 12.0);
         int n = 12;
