@@ -29,6 +29,7 @@ import com.blockoutlines.addon.modules.Saturation;
 import com.blockoutlines.addon.modules.StarrySky;
 import com.blockoutlines.addon.modules.SusChunk;
 import com.blockoutlines.addon.modules.TargetHud;
+import com.blockoutlines.addon.modules.TargetMarker;
 import com.blockoutlines.addon.modules.Wings;
 import com.mojang.logging.LogUtils;
 import meteordevelopment.meteorclient.addons.GithubRepo;
@@ -88,6 +89,7 @@ public class BlockOutlinesAddon extends MeteorAddon {
         Modules.get().add(new HitEffect());
         Modules.get().add(new ProjectileTrails());
         Modules.get().add(new AutoTrident());
+        Modules.get().add(new TargetMarker());
         LOG.info("Better Render loaded");
     }
 
