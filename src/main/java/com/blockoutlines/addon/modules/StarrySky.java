@@ -2,6 +2,10 @@ package com.blockoutlines.addon.modules;
 
 import com.blockoutlines.addon.BlockOutlinesAddon;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
+import meteordevelopment.meteorclient.gui.GuiTheme;
+import meteordevelopment.meteorclient.gui.widgets.WWidget;
+import meteordevelopment.meteorclient.gui.widgets.containers.WVerticalList;
+import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.renderer.Renderer3D;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.ColorSetting;
@@ -39,6 +43,7 @@ public class StarrySky extends Module {
     private final SettingGroup sgNebula = settings.createGroup("Nebula");
     private final SettingGroup sgStars = settings.createGroup("Stars");
     private final SettingGroup sgShooting = settings.createGroup("Shooting stars");
+    private final SettingGroup sgAurora = settings.createGroup("Aurora");
     private final SettingGroup sgDay = settings.createGroup("Day mode");
 
     // -------- general
@@ -311,6 +316,34 @@ public class StarrySky extends Module {
         .build()
     );
 
+    // -------- aurora (night only)
+    private final Setting<Boolean> aurora = sgAurora.add(new BoolSetting.Builder()
+        .name("aurora").description("Northern lights: waving green curtains of light in the night sky.").defaultValue(true).build());
+    private final Setting<Double> auroraBrightness = sgAurora.add(new DoubleSetting.Builder()
+        .name("brightness").description("How strong the lights are.").defaultValue(0.8).range(0.1, 1.0).sliderRange(0.1, 1.0)
+        .visible(aurora::get).build());
+    private final Setting<Integer> auroraBands = sgAurora.add(new IntSetting.Builder()
+        .name("curtains").description("How many separate curtains of light.").defaultValue(3).range(1, 6).sliderRange(1, 5)
+        .visible(aurora::get).build());
+    private final Setting<Integer> auroraWidth = sgAurora.add(new IntSetting.Builder()
+        .name("width").description("How wide one curtain is across the sky (degrees).").defaultValue(95).range(30, 180).sliderRange(40, 160)
+        .visible(aurora::get).build());
+    private final Setting<Integer> auroraBase = sgAurora.add(new IntSetting.Builder()
+        .name("base-height").description("How high above the horizon the bottom edge floats (degrees).").defaultValue(12).range(0, 60).sliderRange(0, 45)
+        .visible(aurora::get).build());
+    private final Setting<Integer> auroraHeight = sgAurora.add(new IntSetting.Builder()
+        .name("curtain-height").description("How tall the curtains reach (degrees).").defaultValue(38).range(10, 80).sliderRange(15, 65)
+        .visible(aurora::get).build());
+    private final Setting<Double> auroraSpeed = sgAurora.add(new DoubleSetting.Builder()
+        .name("speed").description("How fast the curtains wave.").defaultValue(0.6).range(0.1, 3.0).sliderRange(0.1, 2.0)
+        .visible(aurora::get).build());
+    private final Setting<SettingColor> auroraLow = sgAurora.add(new ColorSetting.Builder()
+        .name("bottom-color").description("Color of the bright lower edge.").defaultValue(new SettingColor(70, 255, 130, 255))
+        .visible(aurora::get).build());
+    private final Setting<SettingColor> auroraHigh = sgAurora.add(new ColorSetting.Builder()
+        .name("top-color").description("Color the curtain fades into toward the top.").defaultValue(new SettingColor(110, 90, 255, 255))
+        .visible(aurora::get).build());
+
     // -------- day mode
     public enum TimeMode { World_Time, Real_Clock, Always_Day, Always_Night }
 
@@ -520,6 +553,22 @@ public class StarrySky extends Module {
 
     public StarrySky() {
         super(BlockOutlinesAddon.SKY, "starry-sky", "A prettier sky: drifting sky color, bluish haze, swirling clouds, twinkling stars and shooting stars.");
+    }
+
+    @Override
+    public WWidget getWidget(GuiTheme theme) {
+        WVerticalList list = theme.verticalList();
+        WButton preset = list.add(theme.button("Apply aurora night look")).expandX().widget();
+        preset.action = () -> {
+            // near-black sky, no nebula, bright stars, aurora on
+            skyColorA.set(new SettingColor(2, 3, 9, 255));
+            skyColorB.set(new SettingColor(4, 6, 16, 255));
+            colorShift.set(false);
+            nebula.set(false);
+            stars.set(true);
+            aurora.set(true);
+        };
+        return list;
     }
 
     @Override
@@ -775,8 +824,77 @@ public class StarrySky extends Module {
                 drawTendrils(r, t, cx, cy, cz, radius, cs, sn);
             }
         }
+        if (aurora.get() && nightFade > 0.02) drawAurora(r, t, nightFade, cx, cy, cz, radius);
         if (stars.get() && nightFade > 0.02) drawStars(r, t, nightFade, cx, cy, cz, radius, cs, sn);
         if (shooting.get() && nightFade > 0.02) drawMeteors(r, dt, nightFade, cx, cy, cz, radius);
+    }
+
+    /**
+     * Northern lights: a few curtains of light that wave slowly across the night sky. Each curtain is a row of thin
+     * vertical strips with a sharp bright lower edge that fades out toward the top, and the strips flicker a little
+     * so it looks like rays.
+     */
+    private void drawAurora(Renderer3D r, double t, double nightFade, double cx, double cy, double cz, double radius) {
+        final int SEG = 72, ROWS = 7;
+        int bands = auroraBands.get();
+        double speed = auroraSpeed.get() * t;
+        double baseE = Math.toRadians(auroraBase.get()), heightE = Math.toRadians(auroraHeight.get());
+        double span = Math.toRadians(auroraWidth.get());
+        double bright = auroraBrightness.get() * nightFade;
+        SettingColor lo = auroraLow.get(), hi = auroraHigh.get();
+        double R = radius * 0.985;
+        double[] tmp = new double[3];
+
+        for (int b = 0; b < bands; b++) {
+            double center = Math.toRadians(40 + b * 360.0 / bands) + 0.05 * Math.sin(speed * 0.07 + b * 2.1);
+            double ph = b * 1.7;
+            double[][][] P = new double[SEG + 1][ROWS][3];
+            double[] edge = new double[SEG + 1];
+            double[] ray = new double[SEG + 1];
+            for (int k = 0; k <= SEG; k++) {
+                double u = k / (double) SEG;
+                double az = center + (u - 0.5) * span;
+                // soft ends so the curtain does not stop abruptly
+                edge[k] = Math.pow(Math.sin(Math.PI * u), 0.9);
+                // the lower edge waves, the height changes along the curtain
+                double wave = Math.sin(az * 3.0 + speed * 0.55 + ph) * 0.5 + Math.sin(az * 7.0 - speed * 0.4 + ph * 2) * 0.25;
+                double e0 = baseE + wave * Math.toRadians(5);
+                double h = heightE * (0.55 + 0.30 * Math.sin(az * 4.0 + speed * 0.35 + ph) + 0.15 * Math.sin(az * 11.0 - speed * 0.6));
+                h = Math.max(heightE * 0.25, h) * (0.35 + 0.65 * edge[k]);
+                // thin rays inside the curtain
+                ray[k] = 0.65 + 0.35 * Math.sin(az * 38.0 + speed * 1.3 + ph) * Math.sin(az * 17.0 - speed * 0.7);
+                for (int j = 0; j < ROWS; j++) {
+                    double e = e0 + h * (j / (double) (ROWS - 1));
+                    double x = Math.cos(e) * Math.cos(az), y = Math.sin(e), z = Math.cos(e) * Math.sin(az);
+                    sphere(tmp, 0, x, y, z, cx, cy, cz, R);
+                    P[k][j][0] = tmp[0]; P[k][j][1] = tmp[1]; P[k][j][2] = tmp[2];
+                }
+            }
+            // slow breathing so the whole curtain brightens and dims
+            double breathe = 0.75 + 0.25 * Math.sin(speed * 0.5 + ph * 1.3);
+            for (int k = 0; k < SEG; k++) {
+                double a0 = edge[k] * ray[k] * breathe * bright, a1 = edge[k + 1] * ray[k + 1] * breathe * bright;
+                for (int j = 0; j < ROWS - 1; j++) {
+                    double f0 = j / (double) (ROWS - 1), f1 = (j + 1) / (double) (ROWS - 1);
+                    auroraColor(c1, lo, hi, f0, a0);
+                    auroraColor(c2, lo, hi, f0, a1);
+                    auroraColor(c3, lo, hi, f1, a1);
+                    auroraColor(c4, lo, hi, f1, a0);
+                    quad(r, P[k][j][0], P[k][j][1], P[k][j][2], P[k + 1][j][0], P[k + 1][j][1], P[k + 1][j][2],
+                        P[k + 1][j + 1][0], P[k + 1][j + 1][1], P[k + 1][j + 1][2], P[k][j + 1][0], P[k][j + 1][1], P[k][j + 1][2],
+                        c1, c2, c3, c4);
+                }
+            }
+        }
+    }
+
+    /** One vertex of a curtain: bright at the bottom, fading out and changing color toward the top. */
+    private static void auroraColor(Color c, SettingColor lo, SettingColor hi, double f, double a) {
+        // quick rise at the very bottom, long soft fade upward
+        double fall = Math.pow(1 - f, 1.6) * Math.min(1, 0.25 + f * 8);
+        double m = Math.min(1, f * 1.3);
+        int r = (int) lerp(lo.r, hi.r, m), g = (int) lerp(lo.g, hi.g, m), b = (int) lerp(lo.b, hi.b, m);
+        c.set(r, g, b, (int) Math.round(255 * Math.max(0, Math.min(1, a * fall * 0.85))));
     }
 
     private void drawStars(Renderer3D r, double t, double nightFade, double cx, double cy, double cz, double radius, double cs, double sn) {

@@ -324,7 +324,7 @@ public class DeathEcho extends Module {
         for (int[] f : faces) {
             Color c1 = vc(col, cA[f[0]][0]), c2 = vc(col, cA[f[1]][0]), c3 = vc(col, cA[f[2]][0]), c4 = vc(col, cA[f[3]][0]);
             r.quad(c[f[0]][0], c[f[0]][1], c[f[0]][2], c[f[1]][0], c[f[1]][1], c[f[1]][2],
-                c[f[2]][0], c[f[2]][1], c[f[2]][2], c[f[3]][0], c[f[3]][1], c[f[3]][2], c1, c2, c3, c4);
+                c[f[2]][0], c[f[2]][1], c[f[2]][2], c[f[3]][0], c[f[3]][1], c[f[3]][2], c2, c3, c4, c1);
         }
 
         if (outline.get()) {
