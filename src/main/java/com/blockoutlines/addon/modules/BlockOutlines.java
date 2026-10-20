@@ -8,6 +8,7 @@ import meteordevelopment.meteorclient.gui.widgets.WWidget;
 import meteordevelopment.meteorclient.gui.widgets.containers.WVerticalList;
 import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.events.world.BlockUpdateEvent;
+import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.renderer.MeshBuilder;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.ColorSetting;
@@ -266,6 +267,32 @@ public class BlockOutlines extends Module {
         .build()
     );
 
+    // -------- mining progress
+    public enum ProgressMode { Rising, Growing }
+    private final SettingGroup sgProgress = settings.createGroup("Mining progress");
+
+    public final Setting<Boolean> miningProgress = sgProgress.add(new BoolSetting.Builder()
+        .name("mining-progress").description("Show how far along the block you are breaking is, inside the outline.")
+        .defaultValue(true).build());
+    public final Setting<ProgressMode> progressMode = sgProgress.add(new EnumSetting.Builder<ProgressMode>()
+        .name("progress-style").description("Rising = the box fills up from the bottom. Growing = a small box in the middle grows until it fills the block.")
+        .defaultValue(ProgressMode.Growing).visible(miningProgress::get).build());
+    public final Setting<Boolean> progressByColor = sgProgress.add(new BoolSetting.Builder()
+        .name("color-by-progress").description("The color changes from the start color to the end color while you mine.")
+        .defaultValue(true).visible(miningProgress::get).build());
+    public final Setting<SettingColor> progressStart = sgProgress.add(new ColorSetting.Builder()
+        .name("start-color").description("Color when you just started (also the only color when color-by-progress is off).")
+        .defaultValue(new SettingColor(255, 70, 70, 255)).visible(miningProgress::get).build());
+    public final Setting<SettingColor> progressEnd = sgProgress.add(new ColorSetting.Builder()
+        .name("end-color").description("Color just before the block breaks.")
+        .defaultValue(new SettingColor(80, 255, 120, 255)).visible(() -> miningProgress.get() && progressByColor.get()).build());
+    public final Setting<Double> progressFillAlpha = sgProgress.add(new DoubleSetting.Builder()
+        .name("progress-fill-alpha").description("How strong the progress box is.")
+        .defaultValue(0.45).range(0.05, 1.0).sliderRange(0.05, 1.0).visible(miningProgress::get).build());
+    public final Setting<Boolean> progressLines = sgProgress.add(new BoolSetting.Builder()
+        .name("progress-lines").description("Also draw lines on the progress box.")
+        .defaultValue(true).visible(miningProgress::get).build());
+
     private static final String CUSTOM_ICON = "meteor-client/block-outlines.svg";
     private SvgIcon icon = SvgIcon.load("/assets/blockoutlines/icon.svg");
 
@@ -298,6 +325,58 @@ public class BlockOutlines extends Module {
     private int prevX, prevY, prevZ;
     private long fadeStart;
     private double spin;
+
+    // mining progress, worked out from the block's own break speed while the attack key is held on one block
+    private float mineProgress, shownProgress;
+    private int mineX, mineY, mineZ;
+    private boolean mining;
+
+    @EventHandler
+    private void onTick(TickEvent.Post event) {
+        if (!miningProgress.get() || mc.world == null || mc.player == null) { mining = false; mineProgress = 0; return; }
+        if (!mc.options.attackKey.isPressed() || !(mc.crosshairTarget instanceof BlockHitResult hit) || hit.getType() == HitResult.Type.MISS) {
+            mining = false;
+            mineProgress = 0;
+            return;
+        }
+        BlockPos pos = hit.getBlockPos();
+        if (!mining || pos.getX() != mineX || pos.getY() != mineY || pos.getZ() != mineZ) {
+            mining = true;
+            mineX = pos.getX(); mineY = pos.getY(); mineZ = pos.getZ();
+            mineProgress = 0;
+            shownProgress = 0;
+        }
+        BlockState st = mc.world.getBlockState(pos);
+        if (st.isAir()) { mineProgress = 0; return; }
+        float delta = st.calcBlockBreakingDelta(mc.player, mc.world, pos);
+        if (delta <= 0f) return; // cannot be broken
+        mineProgress = Math.min(1f, mineProgress + delta);
+    }
+
+    private void drawProgress(Render3DEvent event, double dt) {
+        shownProgress += (mineProgress - shownProgress) * (float) Math.min(1.0, dt * 18.0);
+        if (!mining || shownProgress < 0.01f || mineProgress <= 0f) return;
+        double p = Math.min(1.0, shownProgress);
+
+        SettingColor c1 = progressStart.get(), c2 = progressEnd.get();
+        double m = progressByColor.get() ? p : 0;
+        int r = (int) (c1.r + (c2.r - c1.r) * m), g = (int) (c1.g + (c2.g - c1.g) * m), b = (int) (c1.b + (c2.b - c1.b) * m);
+
+        double x1 = minX, y1 = minY, z1 = minZ, x2 = maxX, y2 = maxY, z2 = maxZ;
+        double ix1, iy1, iz1, ix2, iy2, iz2;
+        if (progressMode.get() == ProgressMode.Rising) {
+            ix1 = x1; iz1 = z1; ix2 = x2; iz2 = z2;
+            iy1 = y1; iy2 = y1 + (y2 - y1) * p;
+        } else {
+            double cx = (x1 + x2) / 2, cy = (y1 + y2) / 2, cz = (z1 + z2) / 2;
+            ix1 = cx + (x1 - cx) * p; ix2 = cx + (x2 - cx) * p;
+            iy1 = cy + (y1 - cy) * p; iy2 = cy + (y2 - cy) * p;
+            iz1 = cz + (z1 - cz) * p; iz2 = cz + (z2 - cz) * p;
+        }
+        int fa = a255(progressFillAlpha.get());
+        event.renderer.boxSides(ix1, iy1, iz1, ix2, iy2, iz2, new Color(r, g, b, fa), 0);
+        if (progressLines.get()) event.renderer.boxLines(ix1, iy1, iz1, ix2, iy2, iz2, new Color(r, g, b, Math.min(255, fa + 120)), 0);
+    }
 
     public BlockOutlines() {
         super(BlockOutlinesAddon.CATEGORY, "better-outline", "Smooth custom block outline with a spinning icon and a fading box where blocks break.");
@@ -460,6 +539,7 @@ public class BlockOutlines extends Module {
             }
             int a = Math.max(0, Math.min(255, (int) Math.round(alpha.get() * 255.0 * mult)));
             drawStyled(event, minX, minY, minZ, maxX, maxY, maxZ, new Color(c.r, c.g, c.b, a), mult);
+            if (miningProgress.get()) drawProgress(event, dt);
         } else {
             hasTarget = false;
             hadPrev = false;

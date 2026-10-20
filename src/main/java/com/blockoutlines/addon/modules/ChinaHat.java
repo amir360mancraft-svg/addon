@@ -83,7 +83,7 @@ public class ChinaHat extends Module {
         double s = spin.get();
         switch (paint.get()) {
             case Rainbow:
-                return CosmeticUtil.hsv((float) (u + t * s * 0.25), 0.7f, 1f, alpha);
+                return CosmeticUtil.hsv((u + t * s * 0.25), 0.7f, 1f, alpha);
             case Gradient: {
                 double w = 0.5 + 0.5 * Math.sin((u + t * s * 0.25) * Math.PI * 2);
                 return CosmeticUtil.lerp(new Color(colorA.get()), new Color(colorB.get()), w, alpha);

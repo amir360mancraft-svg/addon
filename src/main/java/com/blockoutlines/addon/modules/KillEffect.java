@@ -289,8 +289,12 @@ public class KillEffect extends Module {
     private void onPacket(PacketEvent.Receive event) {
         if (mc.world == null || !(event.packet instanceof EntityStatusS2CPacket p)) return;
         if (p.getStatus() != 3) return; // entity died
-        Entity e = p.getEntity(mc.world);
-        if (e != null) died(e);
+        // this event arrives on the network thread; the world, its random and our effect list belong to the game thread
+        mc.execute(() -> {
+            if (mc.world == null) return;
+            Entity e = p.getEntity(mc.world);
+            if (e != null) died(e);
+        });
     }
 
     /** Some servers do not send the death packet, so also look at players that have no health left. */
@@ -515,7 +519,7 @@ public class KillEffect extends Module {
     // ---- circle
 
     private Color waveColor(double mix, int alpha, double seconds, double hue) {
-        if (waveRainbow.get()) return CosmeticUtil.hsv((float) (seconds * 0.4 + hue), 0.7f, 1f, alpha);
+        if (waveRainbow.get()) return CosmeticUtil.hsv((seconds * 0.4 + hue), 0.7f, 1f, alpha);
         return CosmeticUtil.lerp(new Color(waveInner.get()), new Color(waveOuter.get()), mix, alpha);
     }
 

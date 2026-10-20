@@ -199,7 +199,7 @@ public class ProjectileTrails extends Module {
     }
 
     private Color color(EntityType<?> type, double u, double secs, int alpha) {
-        if (rainbow.get()) return CosmeticUtil.hsv((float) (secs * rainbowSpeed.get() + u * 0.3), 0.75f, 1f, alpha);
+        if (rainbow.get()) return CosmeticUtil.hsv((secs * rainbowSpeed.get() + u * 0.3), 0.75f, 1f, alpha);
         if (byType.get()) {
             Color a, b;
             if (type == EntityType.ENDER_PEARL) { a = new Color(190, 110, 255, 255); b = new Color(90, 40, 200, 255); }

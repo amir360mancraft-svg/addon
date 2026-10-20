@@ -34,8 +34,12 @@ public final class CosmeticUtil {
         return out;
     }
 
-    public static Color hsv(float h, float s, float v, int alpha) {
-        h = h - (float) Math.floor(h);
+    /**
+     * Hue is taken as a double and wrapped to 0..1 BEFORE it becomes a float. Time in seconds is around 1.7 billion, and
+     * a float cannot hold that with any decimals, so a float hue never changed and every rainbow stayed the same pale red.
+     */
+    public static Color hsv(double hue, float s, float v, int alpha) {
+        float h = (float) (hue - Math.floor(hue));
         int i = (int) (h * 6);
         float f = h * 6 - i;
         float p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);

@@ -178,7 +178,7 @@ public class TargetMarker extends Module {
     }
 
     private Color baseColor(double frac, double secs) {
-        if (rainbow.get()) return CosmeticUtil.hsv((float) (secs * 0.3), 0.7f, 1f, 255);
+        if (rainbow.get()) return CosmeticUtil.hsv((secs * 0.3), 0.7f, 1f, 255);
         if (!byHealth.get()) return new Color(fixed.get());
         Color red = new Color(255, 60, 60, 255), yel = new Color(255, 215, 60, 255), grn = new Color(70, 255, 120, 255);
         return frac > 0.5 ? CosmeticUtil.lerp(yel, grn, (frac - 0.5) * 2.0, 255) : CosmeticUtil.lerp(red, yel, frac * 2.0, 255);

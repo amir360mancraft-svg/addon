@@ -19,6 +19,8 @@ import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.gl.RenderPipelines;
+import net.minecraft.client.option.AttackIndicator;
+import net.minecraft.entity.LivingEntity;
 import net.minecraft.util.Identifier;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.PointerBuffer;
@@ -74,6 +76,13 @@ public class CustomCrosshair extends Module {
     public final Setting<Boolean> hideVanilla = sgGeneral.add(new BoolSetting.Builder()
         .name("hide-vanilla")
         .description("Hides the normal Minecraft crosshair.")
+        .defaultValue(true)
+        .build()
+    );
+
+    public final Setting<Boolean> attackIndicator = sgGeneral.add(new BoolSetting.Builder()
+        .name("attack-indicator")
+        .description("Keeps the attack cooldown indicator under your crosshair while the normal crosshair is hidden (it follows the Attack Indicator video setting).")
         .defaultValue(true)
         .build()
     );
@@ -260,6 +269,24 @@ public class CustomCrosshair extends Module {
                     else event.drawContext.fill(x1, y1, x2, y2, pass == 1 ? lightArgb : darkArgb);
                 }
             }
+        }
+        if (attackIndicator.get() && hideVanilla.get()) drawAttackIndicator(event, sz);
+    }
+
+    /** The cooldown bar that Minecraft draws together with its crosshair, which is hidden along with it. */
+    private void drawAttackIndicator(Render2DEvent event, int sz) {
+        if (mc.player == null || mc.options.getAttackIndicator().getValue() != AttackIndicator.CROSSHAIR) return;
+        var ctx = event.drawContext;
+        int w = mc.getWindow().getScaledWidth(), h = mc.getWindow().getScaledHeight();
+        float p = mc.player.getAttackCooldownProgress(0.0f);
+        int x = w / 2 - 8;
+        int y = h / 2 + Math.max(9, sz / 2 + 1);
+        if (p < 1.0f) {
+            ctx.drawGuiTexture(RenderPipelines.CROSSHAIR, Identifier.ofVanilla("hud/crosshair_attack_indicator_background"), x, y, 16, 4, 0xFFFFFFFF);
+            int fill = (int) (p * 16.0f);
+            if (fill > 0) ctx.fill(x, y + 1, x + fill, y + 3, 0xFFFFFFFF);
+        } else if (mc.targetedEntity instanceof LivingEntity le && le.isAlive() && mc.player.getAttackCooldownProgressPerTick() > 5.0f) {
+            ctx.drawGuiTexture(RenderPipelines.CROSSHAIR, Identifier.ofVanilla("hud/crosshair_attack_indicator_full"), x, y, 16, 16, 0xFFFFFFFF);
         }
     }
 

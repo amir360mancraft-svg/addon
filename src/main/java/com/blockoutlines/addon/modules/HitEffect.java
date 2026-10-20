@@ -342,7 +342,7 @@ public class HitEffect extends Module {
                 x = Math.round(x * 16.0) / 16.0; y = Math.round(y * 16.0) / 16.0; z = Math.round(z * 16.0) / 16.0;
             }
             Color c = rainbow.get()
-                ? CosmeticUtil.hsv((float) (secs * 0.6 + p.hue * 0.3), 0.75f, 1f, alpha)
+                ? CosmeticUtil.hsv((secs * 0.6 + p.hue * 0.3), 0.75f, 1f, alpha)
                 : CosmeticUtil.lerp(new Color(pColorA.get()), new Color(pColorB.get()), u, alpha);
             if (glow.get()) {
                 Color hc = new Color(c.r, c.g, c.b, Math.min(255, alpha / 4));

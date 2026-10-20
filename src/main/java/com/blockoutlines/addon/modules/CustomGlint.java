@@ -282,7 +282,7 @@ public class CustomGlint extends Module {
         Color core = coreColor.get(), glow = glowColor.get();
         float[] cc, gc;
         if (rainbow.get()) {
-            float hue = (float) (seconds * 0.25 + rnd.nextDouble() * 0.1);
+            double hue = seconds * 0.25 + rnd.nextDouble() * 0.1;
             Color a = CosmeticUtil.hsv(hue, 0.35f, 1f, 255), bb = CosmeticUtil.hsv(hue, 0.9f, 1f, 255);
             cc = new float[]{a.r / 255f, a.g / 255f, a.b / 255f};
             gc = new float[]{bb.r / 255f, bb.g / 255f, bb.b / 255f};
@@ -352,7 +352,7 @@ public class CustomGlint extends Module {
                 }
                 float rr, g2, bb2;
                 if (rainbow.get()) {
-                    Color c = CosmeticUtil.hsv((float) (t * 0.25 + x / (double) N * 0.5), 0.9f, 1f, 255);
+                    Color c = CosmeticUtil.hsv((t * 0.25 + x / (double) N * 0.5), 0.9f, 1f, 255);
                     rr = r[i] + base * c.r / 255f; g2 = g[i] + base * c.g / 255f; bb2 = b[i] + base * c.b / 255f;
                 } else {
                     rr = r[i] + base * gr; g2 = g[i] + base * gg; bb2 = b[i] + base * gb;

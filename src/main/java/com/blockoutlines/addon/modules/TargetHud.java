@@ -161,7 +161,10 @@ public class TargetHud extends Module {
     private void onPacket(PacketEvent.Receive event) {
         if (mc.world == null || !(event.packet instanceof EntityStatusS2CPacket p)) return;
         if (p.getStatus() != 35) return; // totem of undying used
-        if (p.getEntity(mc.world) instanceof PlayerEntity pl) pops.merge(pl.getUuid(), 1, Integer::sum);
+        // network thread -> hand over to the game thread
+        mc.execute(() -> {
+            if (mc.world != null && p.getEntity(mc.world) instanceof PlayerEntity pl) pops.merge(pl.getUuid(), 1, Integer::sum);
+        });
     }
 
     // ------------------------------------------------------------------ picking the player you look at

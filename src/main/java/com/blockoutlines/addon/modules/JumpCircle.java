@@ -236,7 +236,7 @@ public class JumpCircle extends Module {
     private static int clamp(double v) { return Math.max(0, Math.min(255, (int) v)); }
 
     private Color ringColor(double mix, int alpha, double seconds, double hueShift) {
-        if (rainbow.get()) return CosmeticUtil.hsv((float) (seconds * rainbowSpeed.get() + hueShift), 0.75f, 1f, alpha);
+        if (rainbow.get()) return CosmeticUtil.hsv((seconds * rainbowSpeed.get() + hueShift), 0.75f, 1f, alpha);
         return CosmeticUtil.lerp(new Color(colorA.get()), new Color(colorB.get()), mix, alpha);
     }
 
@@ -307,7 +307,7 @@ public class JumpCircle extends Module {
             int[] rows = glyph(text.charAt(ci));
             if (rows == null) continue;
             Color c = textRainbow.get()
-                ? CosmeticUtil.hsv((float) (seconds * rainbowSpeed.get() + ci * 0.08), 0.7f, 1f, alpha)
+                ? CosmeticUtil.hsv((seconds * rainbowSpeed.get() + ci * 0.08), 0.7f, 1f, alpha)
                 : new Color(base.r, base.g, base.b, alpha);
             for (int row = 0; row < 7; row++) {
                 int bits = rows[row];

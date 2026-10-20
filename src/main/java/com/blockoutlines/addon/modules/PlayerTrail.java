@@ -330,7 +330,7 @@ public class PlayerTrail extends Module {
     }
 
     private Color color(double u, float hue, double secs, int alpha) {
-        if (rainbow.get()) return CosmeticUtil.hsv((float) (secs * rainbowSpeed.get() + hue * 0.25 + u * 0.3), 0.75f, 1f, alpha);
+        if (rainbow.get()) return CosmeticUtil.hsv((secs * rainbowSpeed.get() + hue * 0.25 + u * 0.3), 0.75f, 1f, alpha);
         return CosmeticUtil.lerp(new Color(colorA.get()), new Color(colorB.get()), u, alpha);
     }
 
