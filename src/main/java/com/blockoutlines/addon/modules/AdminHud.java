@@ -51,8 +51,9 @@ public class AdminHud extends Module {
         .defaultValue(List.of("owner", "admin", "administrator", "mod", "moderator", "staff", "helper", "support", "manager", "dev", "developer", "builder"))
         .build());
     private final Setting<List<String>> extra = sgFind.add(new StringListSetting.Builder()
-        .name("extra-names").description("Players that are always shown as staff (exact name).")
-        .defaultValue(new ArrayList<>()).build());
+        .name("extra-names").description("Players that are always shown as staff (exact name). Comes filled with a list of known staff names; add or remove names as you like.")
+        .defaultValue(new ArrayList<>(List.of("0Gsummer", "Fluffymaster07", "Frwost", "Itszdeath", "Munkerlich",
+            "PastaGamer08", "Showered", "W1zoX_", "archivePedro", "bautiedgar", "drdonutt"))).build());
     private final Setting<List<String>> ignore = sgFind.add(new StringListSetting.Builder()
         .name("ignore-names").description("Players that are never shown, even with a rank word.")
         .defaultValue(new ArrayList<>()).build());
