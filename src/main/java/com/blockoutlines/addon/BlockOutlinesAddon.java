@@ -9,6 +9,7 @@ import com.blockoutlines.addon.modules.BaseFinder;
 import com.blockoutlines.addon.modules.BlockOutlines;
 import com.blockoutlines.addon.modules.ChinaHat;
 import com.blockoutlines.addon.modules.ColorGrading;
+import com.blockoutlines.addon.modules.DeathEcho;
 import com.blockoutlines.addon.modules.DynamicIsland;
 import com.blockoutlines.addon.modules.CustomCrosshair;
 import com.blockoutlines.addon.modules.FakeElytra;
@@ -96,6 +97,7 @@ public class BlockOutlinesAddon extends MeteorAddon {
         Modules.get().add(new TargetMarker());
         Modules.get().add(new AdminHud());
         Modules.get().add(new DynamicIsland());
+        Modules.get().add(new DeathEcho());
         Modules.get().add(new SwingSpeed());
         Modules.get().add(new MenuBackground());
         LOG.info("Better Render loaded");
