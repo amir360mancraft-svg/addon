@@ -2,12 +2,14 @@ package com.blockoutlines.addon;
 
 import com.blockoutlines.addon.modules.AmethystFinder;
 import com.blockoutlines.addon.modules.AnimatedSky;
+import com.blockoutlines.addon.modules.AdminHud;
 import com.blockoutlines.addon.modules.ArmorTrimChanger;
 import com.blockoutlines.addon.modules.AutoTrident;
 import com.blockoutlines.addon.modules.BaseFinder;
 import com.blockoutlines.addon.modules.BlockOutlines;
 import com.blockoutlines.addon.modules.ChinaHat;
 import com.blockoutlines.addon.modules.ColorGrading;
+import com.blockoutlines.addon.modules.DynamicIsland;
 import com.blockoutlines.addon.modules.CustomCrosshair;
 import com.blockoutlines.addon.modules.FakeElytra;
 import com.blockoutlines.addon.modules.LightChunkFinder;
@@ -20,6 +22,7 @@ import com.blockoutlines.addon.modules.ItemCounterHud;
 import com.blockoutlines.addon.modules.ItemDropPhysics;
 import com.blockoutlines.addon.modules.JumpCircle;
 import com.blockoutlines.addon.modules.KillEffect;
+import com.blockoutlines.addon.modules.MenuBackground;
 import com.blockoutlines.addon.modules.Pets;
 import com.blockoutlines.addon.modules.RegionMap;
 import com.blockoutlines.addon.modules.PlayerSigns;
@@ -28,6 +31,7 @@ import com.blockoutlines.addon.modules.ProjectileTrails;
 import com.blockoutlines.addon.modules.Saturation;
 import com.blockoutlines.addon.modules.StarrySky;
 import com.blockoutlines.addon.modules.SusChunk;
+import com.blockoutlines.addon.modules.SwingSpeed;
 import com.blockoutlines.addon.modules.TargetHud;
 import com.blockoutlines.addon.modules.TargetMarker;
 import com.blockoutlines.addon.modules.Wings;
@@ -90,6 +94,10 @@ public class BlockOutlinesAddon extends MeteorAddon {
         Modules.get().add(new ProjectileTrails());
         Modules.get().add(new AutoTrident());
         Modules.get().add(new TargetMarker());
+        Modules.get().add(new AdminHud());
+        Modules.get().add(new DynamicIsland());
+        Modules.get().add(new SwingSpeed());
+        Modules.get().add(new MenuBackground());
         LOG.info("Better Render loaded");
     }
 
