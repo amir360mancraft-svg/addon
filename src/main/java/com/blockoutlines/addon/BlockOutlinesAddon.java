@@ -36,9 +36,11 @@ import com.blockoutlines.addon.modules.SwingSpeed;
 import com.blockoutlines.addon.modules.TargetHud;
 import com.blockoutlines.addon.modules.TargetMarker;
 import com.blockoutlines.addon.modules.Wings;
+import com.blockoutlines.addon.gui.LunarGuiTheme;
 import com.mojang.logging.LogUtils;
 import meteordevelopment.meteorclient.addons.GithubRepo;
 import meteordevelopment.meteorclient.addons.MeteorAddon;
+import meteordevelopment.meteorclient.gui.GuiThemes;
 import meteordevelopment.meteorclient.systems.modules.Category;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import org.slf4j.Logger;
@@ -64,6 +66,7 @@ public class BlockOutlinesAddon extends MeteorAddon {
 
     @Override
     public void onInitialize() {
+        GuiThemes.add(new LunarGuiTheme());
         Modules.get().add(new BlockOutlines());
         Modules.get().add(new ColorGrading());
         Modules.get().add(new CustomCrosshair());
