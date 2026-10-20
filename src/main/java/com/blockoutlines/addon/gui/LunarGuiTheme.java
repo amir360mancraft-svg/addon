@@ -1,6 +1,14 @@
 package com.blockoutlines.addon.gui;
 
 import meteordevelopment.meteorclient.gui.GuiTheme;
+import meteordevelopment.meteorclient.gui.renderer.packer.GuiTexture;
+import meteordevelopment.meteorclient.gui.widgets.WWidget;
+import meteordevelopment.meteorclient.gui.widgets.containers.WWindow;
+import meteordevelopment.meteorclient.gui.widgets.input.WSlider;
+import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
+import meteordevelopment.meteorclient.gui.widgets.pressable.WCheckbox;
+import meteordevelopment.meteorclient.settings.DoubleSetting;
+import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.gui.tabs.TabScreen;
 import meteordevelopment.meteorclient.gui.themes.meteor.MeteorGuiTheme;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
@@ -12,6 +20,14 @@ import net.minecraft.client.gui.screen.Screen;
  * Choose it in the GUI tab, "Theme".
  */
 public class LunarGuiTheme extends MeteorGuiTheme {
+    public final Setting<Double> animationSpeed = settings.getDefaultGroup().add(new DoubleSetting.Builder()
+        .name("animation-speed")
+        .description("How fast the Lunar animations play. Lower = slower and smoother.")
+        .defaultValue(0.8)
+        .range(0.2, 3.0)
+        .sliderRange(0.2, 2.0)
+        .build());
+
     public LunarGuiTheme() {
         super();
         rename("Lunar");
@@ -32,6 +48,26 @@ public class LunarGuiTheme extends MeteorGuiTheme {
         } catch (Throwable t) {
             com.blockoutlines.addon.BlockOutlinesAddon.LOG.error("Could not name the Lunar theme", t);
         }
+    }
+
+    @Override
+    public WWindow window(WWidget icon, String title) {
+        return w(new LunarWidgets.Window(icon, title));
+    }
+
+    @Override
+    protected WButton button(String text, GuiTexture texture) {
+        return w(new LunarWidgets.Button(text, texture));
+    }
+
+    @Override
+    public WCheckbox checkbox(boolean checked) {
+        return w(new LunarWidgets.Checkbox(checked));
+    }
+
+    @Override
+    public WSlider slider(double value, double min, double max) {
+        return w(new LunarWidgets.Slider(value, min, max));
     }
 
     @Override

@@ -14,7 +14,7 @@ public class LunarModulesScreen extends TabScreen {
 
     @Override
     public void initWidgets() {
-        add(new WLunarBrowser()).centerX().bottom().padBottom(theme.scale(14));
+        add(new WLunarBrowser()).center().padTop(theme.scale(26));
     }
 
     @Override

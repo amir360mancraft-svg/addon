@@ -157,6 +157,23 @@ public class WLunarBrowser extends WWidget {
         return v + (target - v) * Math.min(1, speed);
     }
 
+    /** Speed multiplier from the theme settings (1 = normal, lower = slower). */
+    private double animSpeed() {
+        return theme instanceof LunarGuiTheme t ? t.animationSpeed.get() : 1.0;
+    }
+
+    /** Moves a 0..1 progress toward its target in a fixed time, so every animation takes the same, gentle time. */
+    private double move(double v, boolean target, double delta, double seconds) {
+        double step = delta * animSpeed() / seconds;
+        return target ? Math.min(1, v + step) : Math.max(0, v - step);
+    }
+
+    /** Smooth start and end. */
+    private static double ease(double t) {
+        t = MathHelper.clamp(t, 0, 1);
+        return t * t * (3 - 2 * t);
+    }
+
     // ------------------------------------------------------------------ drawing
 
     @Override
@@ -168,13 +185,13 @@ public class WLunarBrowser extends WWidget {
 
         double u = unit();
         delta = Math.min(delta, 0.1);
-        intro = Math.min(1, intro + delta * 2.2);
+        intro = Math.min(1, intro + delta * animSpeed() / 1.0);
         caret += delta;
-        double ease = 1 - Math.pow(1 - intro, 3);
+        double ease = ease(intro);
         double fade = ease * 255;
 
         double pad = 16 * u;
-        double rise = (1 - ease) * 26 * u;
+        double rise = (1 - ease) * 18 * u;
         double px = x, py = y + rise, pw = width, ph = height;
 
         // panel: faint light edge, then the dark glass
@@ -190,7 +207,7 @@ public class WLunarBrowser extends WWidget {
         r.quad(px, py + headerH, pw, 1, col(255, 255, 255, 18 * ease));
 
         // sidebar
-        double sideX = px + pad, sideY = py + headerH + pad, sideW = 178 * u;
+        double sideX = px + pad, sideY = py + headerH + pad, sideW = 200 * u;
         drawSidebar(r, sideX, sideY, sideW, py + ph - pad - sideY, u, delta, ease);
 
         // filters and search
@@ -208,7 +225,6 @@ public class WLunarBrowser extends WWidget {
     }
 
     private void drawSidebar(GuiRenderer r, double sx, double sy, double sw, double sh, double u, double delta, double ease) {
-        double rowH = 36 * u, gap = 4 * u;
         List<String> names = new ArrayList<>();
         List<Integer> counts = new ArrayList<>();
         names.add("All");
@@ -222,19 +238,22 @@ public class WLunarBrowser extends WWidget {
         names.add("Favorites");
         counts.add(fav);
 
+        double gap = 3 * u;
+        double rowH = Math.min(36 * u, (sh - gap * (names.size() - 1)) / names.size());
         double yy = sy;
         for (int i = 0; i < names.size() && i < rowHover.length; i++) {
             int sel = i == 0 ? -1 : (i == names.size() - 1 ? -2 : i - 1);
             boolean active = selected == sel;
             boolean over = mx >= sx && mx <= sx + sw && my >= yy && my <= yy + rowH;
-            rowHover[i] = approach(rowHover[i], over ? 1 : 0, delta * 14);
+            rowHover[i] = move(rowHover[i], over, delta, 0.22);
             hits.add(new Hit(sx, yy, sw, rowH, Kind.Category, sel, null));
 
-            double a = active ? 70 : 16 * rowHover[i];
+            double rh = ease(rowHover[i]);
+            double a = active ? 70 : 16 * rh;
             if (a > 0.5) round(r, sx, yy, sw, rowH, 8 * u, col(active ? ACCENT : new int[]{255, 255, 255}, a * ease));
             if (active) round(r, sx, yy + rowH * 0.2, 3 * u, rowH * 0.6, 1.5 * u, col(ACCENT, 255 * ease));
 
-            Color tc = active ? col(255, 255, 255, 255 * ease) : col(190, 198, 215, (200 + 40 * rowHover[i]) * ease);
+            Color tc = active ? col(255, 255, 255, 255 * ease) : col(190, 198, 215, (200 + 40 * rh) * ease);
             r.text(fit(names.get(i), sw - 64 * u), sx + 14 * u, yy + (rowH - textH()) / 2, tc, false);
             String n = String.valueOf(counts.get(i));
             r.text(n, sx + sw - 12 * u - textW(n), yy + (rowH - textH()) / 2, col(120, 130, 150, 255 * ease), false);
@@ -250,10 +269,10 @@ public class WLunarBrowser extends WWidget {
             double w = textW(label) + 30 * u;
             boolean active = filter == f;
             boolean over = mx >= x0 && mx <= x0 + w && my >= cy && my <= cy + rowH;
-            chipHover[f.ordinal()] = approach(chipHover[f.ordinal()], over ? 1 : 0, delta * 14);
+            chipHover[f.ordinal()] = move(chipHover[f.ordinal()], over, delta, 0.22);
             hits.add(new Hit(x0, cy, w, rowH, Kind.Chip, f.ordinal(), null));
             if (active) round(r, x0, cy, w, rowH, 7 * u, col(ACCENT, 255 * ease));
-            else round(r, x0, cy, w, rowH, 7 * u, col(255, 255, 255, (20 + 22 * chipHover[f.ordinal()]) * ease));
+            else round(r, x0, cy, w, rowH, 7 * u, col(255, 255, 255, (20 + 22 * ease(chipHover[f.ordinal()])) * ease));
             r.text(label, x0 + (w - textW(label)) / 2, cy + (rowH - textH()) / 2, col(255, 255, 255, (active ? 255 : 215) * ease), false);
             x0 += w + 8 * u;
         }
@@ -307,7 +326,7 @@ public class WLunarBrowser extends WWidget {
 
         maxScroll = Math.max(0, contentH - gridH);
         scrollTarget = MathHelper.clamp(scrollTarget, 0, maxScroll);
-        scroll = approach(scroll, scrollTarget, delta * 16);
+        scroll = approach(scroll, scrollTarget, delta * 9 * animSpeed());
         if (Math.abs(scroll - scrollTarget) < 0.3) scroll = scrollTarget;
 
         if (list.isEmpty()) {
@@ -327,16 +346,18 @@ public class WLunarBrowser extends WWidget {
             if (cardY + cardH < gridY - 2 || cardY > gridY + gridH + 2) continue;
 
             // cards slide in one after the other when the page is opened
-            double appear = MathHelper.clamp(intro * 1.6 - (row * 0.12 + colI * 0.05), 0, 1);
-            double ap = 1 - Math.pow(1 - appear, 3);
+            double appear = MathHelper.clamp(intro * 1.7 - (row * 0.14 + colI * 0.07), 0, 1);
+            double ap = ease(appear);
             double a = ap * 255;
-            double cy = cardY + (1 - ap) * 14 * u;
+            double cy = cardY + (1 - ap) * 16 * u;
 
             boolean over = inGrid && mx >= cardX && mx <= cardX + cardW && my >= cy && my <= cy + cardH;
-            double hv = approach(hover.getOrDefault(m, 0.0), over ? 1 : 0, delta * 12);
-            hover.put(m, hv);
-            double on = approach(onAnim.getOrDefault(m, m.isActive() ? 1.0 : 0.0), m.isActive() ? 1 : 0, delta * 9);
-            onAnim.put(m, on);
+            double hp = move(hover.getOrDefault(m, 0.0), over, delta, 0.25);
+            hover.put(m, hp);
+            double hv = ease(hp);
+            double onp = move(onAnim.getOrDefault(m, m.isActive() ? 1.0 : 0.0), m.isActive(), delta, 0.45);
+            onAnim.put(m, onp);
+            double on = ease(onp);
 
             hits.add(new Hit(cardX, cy, cardW, cardH, Kind.Card, 0, m));
 
