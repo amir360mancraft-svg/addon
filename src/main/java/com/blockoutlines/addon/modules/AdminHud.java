@@ -110,7 +110,7 @@ public class AdminHud extends Module {
     private List<String> patternKey = null;
 
     public AdminHud() {
-        super(BlockOutlinesAddon.COMBAT, "admin-hud",
+        super(BlockOutlinesAddon.COMBAT, "better-admin-hud",
             "A panel listing the staff members who are online, with an alert when one joins or leaves.");
     }
 
