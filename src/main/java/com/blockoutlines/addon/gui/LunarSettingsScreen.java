@@ -42,8 +42,7 @@ public class LunarSettingsScreen extends WindowTabScreen {
 
         WButton reset = add(theme.button("Reset all Lunar colors")).expandX().widget();
         reset.action = () -> {
-            theme.settings.reset();
-            lunar.applyAccent(64, 140, 255);
+            lunar.resetLook();
             reload();
         };
 

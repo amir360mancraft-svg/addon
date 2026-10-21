@@ -1,7 +1,14 @@
 package com.blockoutlines.addon.gui;
 
 import meteordevelopment.meteorclient.gui.GuiTheme;
+import meteordevelopment.meteorclient.gui.WidgetScreen;
 import meteordevelopment.meteorclient.gui.renderer.packer.GuiTexture;
+import meteordevelopment.meteorclient.gui.utils.CharFilter;
+import meteordevelopment.meteorclient.gui.widgets.containers.WSection;
+import meteordevelopment.meteorclient.gui.widgets.input.WDropdown;
+import meteordevelopment.meteorclient.gui.widgets.input.WTextBox;
+import meteordevelopment.meteorclient.settings.IntSetting;
+import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.gui.tabs.TabScreen;
 import meteordevelopment.meteorclient.gui.themes.meteor.MeteorGuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
@@ -63,9 +70,15 @@ public class LunarGuiTheme extends MeteorGuiTheme {
         .name("module-icons").description("Draw a small icon on the cards of this addon's modules.")
         .defaultValue(true).build());
 
+    /** Which of the ready-made looks (Midnight, OLED, Graphite, Glass) was picked in the Lunar settings. Not shown in the list. */
+    public final Setting<Integer> themePreset = sgLunar.add(new IntSetting.Builder()
+        .name("theme-preset").description("The ready-made look that is selected.")
+        .defaultValue(0).range(0, 3).visible(() -> false).build());
+
     public LunarGuiTheme() {
         super();
         rename("Lunar");
+        settingsFactory = new LunarSettingsFactory(this);
         applyAccent(64, 140, 255);
         moduleBackground.set(new SettingColor(40, 52, 76));
         favoriteColor.set(new SettingColor(255, 205, 60));
@@ -76,6 +89,14 @@ public class LunarGuiTheme extends MeteorGuiTheme {
         accentColor.set(new SettingColor(r, g, b));
         checkboxColor.set(new SettingColor(r, g, b));
         sliderLeft.set(new SettingColor(r, g, b));
+    }
+
+    /** Puts every setting of the theme back to the Lunar defaults. */
+    public void resetLook() {
+        settings.reset();
+        applyAccent(64, 140, 255);
+        moduleBackground.set(new SettingColor(40, 52, 76));
+        favoriteColor.set(new SettingColor(255, 205, 60));
     }
 
     public int[] accent() {
@@ -122,5 +143,25 @@ public class LunarGuiTheme extends MeteorGuiTheme {
     @Override
     public boolean isModulesScreen(Screen screen) {
         return screen instanceof LunarModulesScreen;
+    }
+
+    @Override
+    public WTextBox textBox(String text, String placeholder, CharFilter filter, Class<? extends WTextBox.Renderer> renderer) {
+        return w(new LunarWidgets.TextBox(text, placeholder, filter, renderer));
+    }
+
+    @Override
+    public <T> WDropdown<T> dropdown(T[] values, T value) {
+        return w(new LunarWidgets.Dropdown<>(values, value));
+    }
+
+    @Override
+    public WSection section(String title, boolean expanded, WWidget headerWidget) {
+        return w(new LunarSection(title, expanded, headerWidget));
+    }
+
+    @Override
+    public WidgetScreen moduleScreen(Module module) {
+        return new LunarModuleScreen(this, module);
     }
 }

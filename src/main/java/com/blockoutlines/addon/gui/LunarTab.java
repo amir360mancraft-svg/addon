@@ -15,11 +15,11 @@ public class LunarTab extends Tab {
 
     @Override
     public TabScreen createScreen(GuiTheme theme) {
-        return new LunarSettingsScreen(theme, this);
+        return theme instanceof LunarGuiTheme ? new LunarPageScreen(theme, this) : new LunarSettingsScreen(theme, this);
     }
 
     @Override
     public boolean isScreen(Screen screen) {
-        return screen instanceof LunarSettingsScreen;
+        return screen instanceof LunarPageScreen || screen instanceof LunarSettingsScreen;
     }
 }
