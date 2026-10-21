@@ -2,41 +2,85 @@ package com.blockoutlines.addon.gui;
 
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.renderer.packer.GuiTexture;
+import meteordevelopment.meteorclient.gui.tabs.TabScreen;
+import meteordevelopment.meteorclient.gui.themes.meteor.MeteorGuiTheme;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
 import meteordevelopment.meteorclient.gui.widgets.containers.WWindow;
 import meteordevelopment.meteorclient.gui.widgets.input.WSlider;
 import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
 import meteordevelopment.meteorclient.gui.widgets.pressable.WCheckbox;
+import meteordevelopment.meteorclient.settings.BoolSetting;
+import meteordevelopment.meteorclient.settings.ColorSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
 import meteordevelopment.meteorclient.settings.Setting;
-import meteordevelopment.meteorclient.gui.tabs.TabScreen;
-import meteordevelopment.meteorclient.gui.themes.meteor.MeteorGuiTheme;
+import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import net.minecraft.client.gui.screen.Screen;
 
 /**
  * A second GUI theme, "Lunar". Everything inside the windows is Meteor's own (so every setting widget keeps working),
- * with a bluer color scheme, and the Modules tab is replaced by a card browser in the style of Lunar Client.
- * Choose it in the GUI tab, "Theme".
+ * restyled with rounded dark glass, and the Modules tab is replaced by a card browser in the style of Lunar Client.
+ * Choose it in the GUI tab, "Theme". The colors, opacity and sizes are in the "Lunar" tab (or the GUI tab).
  */
 public class LunarGuiTheme extends MeteorGuiTheme {
-    public final Setting<Double> animationSpeed = settings.getDefaultGroup().add(new DoubleSetting.Builder()
-        .name("animation-speed")
-        .description("How fast the Lunar animations play. Lower = slower and smoother.")
-        .defaultValue(0.8)
-        .range(0.2, 3.0)
-        .sliderRange(0.2, 2.0)
-        .build());
+    /** Ready-made accent colors for the buttons of the Lunar tab: name, r, g, b. */
+    public static final Object[][] PRESETS = {
+        {"Blue", 64, 140, 255}, {"Cyan", 50, 200, 230}, {"Green", 60, 210, 130}, {"Purple", 150, 100, 255},
+        {"Pink", 255, 100, 170}, {"Red", 255, 80, 90}, {"Orange", 255, 150, 60}, {"White", 230, 235, 245},
+    };
+
+    private final SettingGroup sgLunar = settings.createGroup("Lunar");
+
+    public final Setting<Double> animationSpeed = sgLunar.add(new DoubleSetting.Builder()
+        .name("animation-speed").description("How fast the Lunar animations play. Lower = slower and smoother.")
+        .defaultValue(0.8).range(0.2, 3.0).sliderRange(0.2, 2.0).build());
+
+    public final Setting<SettingColor> panelColor = sgLunar.add(new ColorSetting.Builder()
+        .name("panel-color").description("Color of the panels and windows. The alpha is how see-through they are.")
+        .defaultValue(new SettingColor(14, 17, 24, 228)).build());
+
+    public final Setting<SettingColor> cardColor = sgLunar.add(new ColorSetting.Builder()
+        .name("card-color").description("Color of the module cards. The alpha is how see-through they are.")
+        .defaultValue(new SettingColor(22, 26, 36, 215)).build());
+
+    public final Setting<SettingColor> enabledColor = sgLunar.add(new ColorSetting.Builder()
+        .name("enabled-color").description("Color of the ENABLED strip.")
+        .defaultValue(new SettingColor(38, 168, 100, 255)).build());
+
+    public final Setting<SettingColor> disabledColor = sgLunar.add(new ColorSetting.Builder()
+        .name("disabled-color").description("Color of the DISABLED strip.")
+        .defaultValue(new SettingColor(176, 38, 64, 255)).build());
+
+    public final Setting<Double> cornerRadius = sgLunar.add(new DoubleSetting.Builder()
+        .name("corner-radius").description("How round the corners of cards, buttons and windows are.")
+        .defaultValue(10.0).range(0.0, 24.0).sliderRange(0.0, 20.0).build());
+
+    public final Setting<Double> panelSize = sgLunar.add(new DoubleSetting.Builder()
+        .name("panel-size").description("Size of the module panel.")
+        .defaultValue(1.0).range(0.6, 1.3).sliderRange(0.6, 1.3).build());
+
+    public final Setting<Boolean> showIcons = sgLunar.add(new BoolSetting.Builder()
+        .name("module-icons").description("Draw a small icon on the cards of this addon's modules.")
+        .defaultValue(true).build());
 
     public LunarGuiTheme() {
         super();
         rename("Lunar");
-
-        accentColor.set(new SettingColor(64, 140, 255));
-        checkboxColor.set(new SettingColor(64, 140, 255));
+        applyAccent(64, 140, 255);
         moduleBackground.set(new SettingColor(40, 52, 76));
-        sliderLeft.set(new SettingColor(48, 110, 210));
         favoriteColor.set(new SettingColor(255, 205, 60));
+    }
+
+    /** Sets the accent color everywhere the theme uses one. */
+    public void applyAccent(int r, int g, int b) {
+        accentColor.set(new SettingColor(r, g, b));
+        checkboxColor.set(new SettingColor(r, g, b));
+        sliderLeft.set(new SettingColor(r, g, b));
+    }
+
+    public int[] accent() {
+        SettingColor c = accentColor.get();
+        return new int[]{c.r, c.g, c.b};
     }
 
     /** The theme name is a final field of the base class and Meteor's own theme already uses "Meteor". */

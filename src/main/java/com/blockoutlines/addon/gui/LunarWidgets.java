@@ -16,23 +16,16 @@ public final class LunarWidgets {
     private LunarWidgets() {
     }
 
-    /** A rectangle with round corners, drawn as one-pixel rows at the top and bottom. */
-    static void round(GuiRenderer r, double x, double y, double w, double h, double rad, Color c) {
-        if (w <= 0 || h <= 0) return;
-        rad = Math.min(rad, Math.min(w, h) / 2.0);
-        int rows = (int) Math.floor(rad);
-        if (rows < 1) { r.quad(x, y, w, h, c); return; }
-        for (int i = 0; i < rows; i++) {
-            double d = rad - i - 0.5;
-            double inset = rad - Math.sqrt(Math.max(0, rad * rad - d * d));
-            r.quad(x + inset, y + i, w - inset * 2, 1, c);
-            r.quad(x + inset, y + h - i - 1, w - inset * 2, 1, c);
-        }
-        r.quad(x, y + rows, w, h - rows * 2, c);
+    private static void round(GuiRenderer r, double x, double y, double w, double h, double rad, Color c) {
+        LunarDraw.round(r, x, y, w, h, rad, c);
     }
 
-    static Color col(int r, int g, int b, double a) {
-        return new Color(r, g, b, (int) Math.max(0, Math.min(255, Math.round(a))));
+    private static Color col(int r, int g, int b, double a) {
+        return LunarDraw.col(r, g, b, a);
+    }
+
+    private static double radius(WWidget w, double scale) {
+        return (w.theme instanceof LunarGuiTheme t ? t.cornerRadius.get() : 10.0) * scale * w.theme.scale(1);
     }
 
     private static Color withAlpha(SettingColor c, double a) {
@@ -63,8 +56,10 @@ public final class LunarWidgets {
         @Override
         protected void onRender(GuiRenderer r, double mouseX, double mouseY, double delta) {
             double u = theme.scale(1);
-            round(r, x - 1, y - 1, width + 2, height + 2, 11 * u, col(255, 255, 255, 30));
-            round(r, x, y, width, height, 10 * u, col(14, 17, 24, 232));
+            SettingColor pc = ((LunarGuiTheme) theme).panelColor.get();
+            double rad = radius(this, 1.0);
+            round(r, x - 1, y - 1, width + 2, height + 2, rad + u, col(255, 255, 255, 30));
+            round(r, x, y, width, height, rad, col(pc.r, pc.g, pc.b, Math.min(255, pc.a + 4)));
         }
 
         private class LunarHeader extends WHeader {
@@ -76,7 +71,7 @@ public final class LunarWidgets {
             protected void onRender(GuiRenderer r, double mouseX, double mouseY, double delta) {
                 double u = theme.scale(1);
                 SettingColor accent = ((LunarGuiTheme) theme).accentColor.get();
-                round(r, x + 2 * u, y + 2 * u, width - 4 * u, height - 4 * u, 8 * u, withAlpha(accent, 150));
+                round(r, x + 2 * u, y + 2 * u, width - 4 * u, height - 4 * u, Math.max(2 * u, radius(this, 0.8)), withAlpha(accent, 150));
                 r.quad(x + 10 * u, y + 2 * u, width - 20 * u, 1, col(255, 255, 255, 70));
             }
         }
@@ -97,7 +92,7 @@ public final class LunarWidgets {
             hoverP = MathHelper.clamp(hoverP + (mouseOver ? 1 : -1) * delta * speed(this) / 0.2, 0, 1);
             double h = ease(hoverP);
             double a = pressed ? 56 : 24 + 22 * h;
-            round(r, x, y, width, height, 6 * u, col(255, 255, 255, a));
+            round(r, x, y, width, height, radius(this, 0.6), col(255, 255, 255, a));
             if (text != null) {
                 r.text(text, x + width / 2 - textWidth / 2, y + pad(), theme().textColor.get(), false);
             } else if (texture != null) {
@@ -125,9 +120,9 @@ public final class LunarWidgets {
             progress = MathHelper.clamp(progress + (checked ? 1 : -1) * delta * speed(this) / 0.22, 0, 1);
             hoverP = MathHelper.clamp(hoverP + (mouseOver ? 1 : -1) * delta * speed(this) / 0.2, 0, 1);
             double p = ease(progress);
-            SettingColor accent = theme().checkboxColor.get();
+            SettingColor accent = theme().accentColor.get();
 
-            round(r, x, y, width, height, 5 * u, col(255, 255, 255, 26 + 18 * ease(hoverP)));
+            round(r, x, y, width, height, radius(this, 0.45), col(255, 255, 255, 26 + 18 * ease(hoverP)));
             if (p > 0.01) {
                 double m = 2 * u;
                 double cs = (width - m * 2) * p, ch = (height - m * 2) * p;
@@ -154,7 +149,7 @@ public final class LunarWidgets {
             double total = width - hs;
 
             round(r, bx, by, total, th, th / 2, col(255, 255, 255, 30));
-            if (valueWidth > 1) round(r, bx, by, Math.max(th, valueWidth), th, th / 2, withAlpha(theme().sliderLeft.get(), 255));
+            if (valueWidth > 1) round(r, bx, by, Math.max(th, valueWidth), th, th / 2, withAlpha(theme().accentColor.get(), 255));
 
             double glow = (dragging || handleMouseOver) ? 1 : 0;
             if (glow > 0) r.quad(x + valueWidth - 2 * u, y - 2 * u, hs + 4 * u, hs + 4 * u, GuiRenderer.CIRCLE, col(255, 255, 255, 40));
