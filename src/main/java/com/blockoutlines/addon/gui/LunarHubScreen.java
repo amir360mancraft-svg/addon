@@ -29,9 +29,9 @@ public class LunarHubScreen extends TabScreen {
     }
 
     @Override
-    public void init(net.minecraft.client.MinecraftClient client, int w, int h) {
-        super.init(client, w, h);
-        editor.init(client, w, h);
+    protected void init() {
+        super.init();
+        editor.init(width, height);
     }
 
     @Override
