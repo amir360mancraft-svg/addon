@@ -89,6 +89,7 @@ public class LunarGuiTheme extends MeteorGuiTheme {
     public LunarGuiTheme() {
         super();
         INSTANCE = this;
+        LunarHooks.register();
         rename("Lunar");
         settingsFactory = new LunarSettingsFactory(this);
         applyAccent(64, 140, 255);

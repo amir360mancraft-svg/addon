@@ -8,6 +8,11 @@ import meteordevelopment.meteorclient.utils.Utils;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.input.KeyInput;
+import meteordevelopment.meteorclient.systems.hud.Hud;
+import meteordevelopment.meteorclient.systems.hud.HudElement;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * What Right Shift opens: your HUD with its elements (drag them to move them, right click for their settings, right click
@@ -32,6 +37,20 @@ public class LunarHubScreen extends TabScreen {
     protected void init() {
         super.init();
         editor.init(width, height);
+        removeSwitchedOff();
+    }
+
+    /** An element you switched off is deleted: nothing stays behind as a red box. */
+    private void removeSwitchedOff() {
+        List<HudElement> gone = new ArrayList<>();
+        for (HudElement e : Hud.get()) if (!e.isActive()) gone.add(e);
+        for (HudElement e : gone) e.remove();
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        removeSwitchedOff();
     }
 
     @Override

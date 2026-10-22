@@ -4,6 +4,7 @@ import meteordevelopment.meteorclient.gui.renderer.GuiRenderer;
 import meteordevelopment.meteorclient.gui.tabs.Tab;
 import meteordevelopment.meteorclient.gui.tabs.TabScreen;
 import meteordevelopment.meteorclient.gui.tabs.Tabs;
+import meteordevelopment.meteorclient.gui.tabs.builtin.GuiTab;
 import meteordevelopment.meteorclient.gui.tabs.builtin.ModulesTab;
 import meteordevelopment.meteorclient.gui.widgets.WTopBar;
 import meteordevelopment.meteorclient.gui.widgets.pressable.WPressable;
@@ -30,7 +31,17 @@ public class LunarTopBar extends WTopBar {
     @Override
     public void init() {
         spacing = 6;
-        for (Tab tab : Tabs.get()) add(new Chip(tab)).centerY();
+        for (Tab tab : Tabs.get()) {
+            if (tab instanceof GuiTab) continue; // the theme picker, the Lunar tab replaces it
+            add(new Chip(tab)).centerY();
+        }
+    }
+
+    /** The hub has its own buttons in the middle, so the bar is not drawn there. */
+    @Override
+    public boolean render(GuiRenderer renderer, double mouseX, double mouseY, double delta) {
+        visible = !(mc.currentScreen instanceof LunarHubScreen);
+        return super.render(renderer, mouseX, mouseY, delta);
     }
 
     private static String label(Tab tab) {
@@ -58,6 +69,7 @@ public class LunarTopBar extends WTopBar {
 
         @Override
         protected void onPressed(int button) {
+            if (mc.currentScreen instanceof LunarHubScreen) return;
             if (isCurrent() && !(tab instanceof ModulesTab)) return;
             if (tab instanceof ModulesTab && theme instanceof LunarGuiTheme lt) lt.browserRequested = true;
 
