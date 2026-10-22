@@ -252,6 +252,19 @@ public class WLunarSettingsPage extends LunarCanvas {
 
         y = toggleRow(r, y, 1, "Hub on Right Shift", "Show the HUD editor with the big buttons first, then the module list.", lt.showHub.get(), a, u, delta);
 
+        // setup guide
+        double rowH1 = 62 * u, cy1 = y + rowH1 / 2;
+        r.text("Run setup guide", cx, y + 10 * u, col(240, 244, 252, 255 * a), false);
+        r.text("Open the first-launch setup wizard to choose presets and themes.", cx, y + 10 * u + textH() + 4 * u, col(150, 160, 182, 255 * a), false);
+        String label1 = "START GUIDE";
+        double bw1 = textW(label1) + 32 * u, bh1 = 34 * u, bx1 = cx + cw - bw1, by1 = cy1 - bh1 / 2;
+        boolean over1 = !closing && inContent(my) && mx >= bx1 && mx <= bx1 + bw1 && my >= by1 && my <= by1 + bh1;
+        double hv1 = anim(K_WIZARD * 1000, over1, delta, 0.2);
+        round(r, bx1, by1, bw1, bh1, rad(0.7, u), col(accent, (180 + 75 * hv1) * a));
+        r.text(label1, bx1 + (bw1 - textW(label1)) / 2, by1 + (bh1 - textH()) / 2, col(255, 255, 255, 255 * a), false);
+        hit(bx1, by1, bw1, bh1, K_WIZARD, 0);
+        y += rowH1;
+
         // reset
         double rowH = 62 * u, cy = y + rowH / 2;
         r.text("Reset appearance", cx, y + 10 * u, col(240, 244, 252, 255 * a), false);

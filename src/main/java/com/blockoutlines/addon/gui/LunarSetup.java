@@ -147,6 +147,12 @@ public final class LunarSetup {
 
     @EventHandler
     private void onTick(TickEvent.Post event) {
+        if (!sessionChecked && !isSetupDone() && mc.currentScreen instanceof TitleScreen title) {
+            sessionChecked = true;
+            mc.setScreen(new LunarWizardScreen(title));
+            return;
+        }
+
         if (pendingCollection != null && mc.world != null && mc.player != null) {
             applyPendingPreset();
         }
