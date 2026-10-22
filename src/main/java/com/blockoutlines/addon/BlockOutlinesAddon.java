@@ -38,6 +38,7 @@ import com.blockoutlines.addon.modules.TargetHud;
 import com.blockoutlines.addon.modules.TargetMarker;
 import com.blockoutlines.addon.modules.Wings;
 import com.blockoutlines.addon.gui.LunarGuiTheme;
+import com.blockoutlines.addon.gui.LunarSetup;
 import com.blockoutlines.addon.gui.LunarTab;
 import com.mojang.logging.LogUtils;
 import meteordevelopment.meteorclient.addons.GithubRepo;
@@ -71,6 +72,7 @@ public class BlockOutlinesAddon extends MeteorAddon {
     public void onInitialize() {
         GuiThemes.add(new LunarGuiTheme());
         Tabs.add(LunarTab.INSTANCE);
+        LunarSetup.register();
         Modules.get().add(new BlockOutlines());
         Modules.get().add(new ColorGrading());
         Modules.get().add(new CustomCrosshair());

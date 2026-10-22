@@ -19,7 +19,7 @@ import static org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT;
 public class WLunarSettingsPage extends LunarCanvas {
     // clickable kinds: 1..3 are in the frame (always clickable), 10 and up are inside the scrolling content
     private static final int K_CLOSE = 1, K_NAV = 2, K_ADV = 3;
-    private static final int K_PRESET = 10, K_ACCENT = 11, K_TOGGLE = 12, K_SLIDER = 13, K_EN = 14, K_DIS = 15, K_RESET = 16;
+    private static final int K_PRESET = 10, K_ACCENT = 11, K_TOGGLE = 12, K_SLIDER = 13, K_EN = 14, K_DIS = 15, K_RESET = 16, K_WIZARD = 17;
 
     private static final String[] PAGES = {"Appearance", "Layout", "Behavior"};
     private static final String[] PRESET_NAMES = {"Midnight", "OLED", "Graphite", "Glass"};
@@ -452,6 +452,7 @@ public class WLunarSettingsPage extends LunarCanvas {
             case K_EN -> lt.enabledColor.set(new SettingColor(ENABLED[h.id][0], ENABLED[h.id][1], ENABLED[h.id][2], 255));
             case K_DIS -> lt.disabledColor.set(new SettingColor(DISABLED[h.id][0], DISABLED[h.id][1], DISABLED[h.id][2], 255));
             case K_RESET -> lt.resetLook();
+            case K_WIZARD -> LunarSetup.openWizard(screen);
             default -> {
                 return false;
             }
