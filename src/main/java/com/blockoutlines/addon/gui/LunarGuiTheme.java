@@ -75,8 +75,20 @@ public class LunarGuiTheme extends MeteorGuiTheme {
         .name("theme-preset").description("The ready-made look that is selected.")
         .defaultValue(0).range(0, 3).visible(() -> false).build());
 
+    /** Whether Right Shift shows the hub (HUD editing + shortcuts) first, or goes straight to the module list. */
+    public final Setting<Boolean> showHub = sgLunar.add(new BoolSetting.Builder()
+        .name("show-hub").description("Right Shift opens the hub (move your HUD, then pick what to edit) before the module list.")
+        .defaultValue(true).build());
+
+    /** The single instance, so the plain Minecraft screens can read the colors too. */
+    public static LunarGuiTheme INSTANCE;
+
+    /** Set by the hub right before it opens the module list. */
+    public boolean browserRequested;
+
     public LunarGuiTheme() {
         super();
+        INSTANCE = this;
         rename("Lunar");
         settingsFactory = new LunarSettingsFactory(this);
         applyAccent(64, 140, 255);
@@ -137,12 +149,21 @@ public class LunarGuiTheme extends MeteorGuiTheme {
 
     @Override
     public TabScreen modulesScreen() {
-        return new LunarModulesScreen(this);
+        if (browserRequested || !showHub.get()) {
+            browserRequested = false;
+            return new LunarModulesScreen(this);
+        }
+        return new LunarHubScreen(this);
     }
 
     @Override
     public boolean isModulesScreen(Screen screen) {
-        return screen instanceof LunarModulesScreen;
+        return screen instanceof LunarModulesScreen || screen instanceof LunarHubScreen;
+    }
+
+    @Override
+    public meteordevelopment.meteorclient.gui.widgets.WTopBar topBar() {
+        return w(new LunarTopBar());
     }
 
     @Override

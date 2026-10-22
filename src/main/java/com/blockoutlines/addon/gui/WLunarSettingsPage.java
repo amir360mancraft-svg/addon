@@ -250,6 +250,8 @@ public class WLunarSettingsPage extends LunarCanvas {
         y = swatchRow(r, y, K_EN, "Enabled color", "The strip of a module that is on.", ENABLED, lt.enabledColor.get(), a, u, delta);
         y = swatchRow(r, y, K_DIS, "Disabled color", "The strip of a module that is off.", DISABLED, lt.disabledColor.get(), a, u, delta);
 
+        y = toggleRow(r, y, 1, "Hub on Right Shift", "Show the HUD editor with the big buttons first, then the module list.", lt.showHub.get(), a, u, delta);
+
         // reset
         double rowH = 62 * u, cy = y + rowH / 2;
         r.text("Reset appearance", cx, y + 10 * u, col(240, 244, 252, 255 * a), false);
@@ -439,7 +441,10 @@ public class WLunarSettingsPage extends LunarCanvas {
                 Object[] p = LunarGuiTheme.PRESETS[h.id];
                 lt.applyAccent((Integer) p[1], (Integer) p[2], (Integer) p[3]);
             }
-            case K_TOGGLE -> lt.showIcons.set(!lt.showIcons.get());
+            case K_TOGGLE -> {
+                if (h.id == 1) lt.showHub.set(!lt.showHub.get());
+                else lt.showIcons.set(!lt.showIcons.get());
+            }
             case K_SLIDER -> {
                 dragSlider = h.id;
                 setSlider(h.id, (px - sliderX[h.id]) / sliderW[h.id]);
