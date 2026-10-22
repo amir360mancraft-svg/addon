@@ -81,6 +81,7 @@ public class LunarAddHudScreen extends WindowScreen {
 
     private void use(HudElementInfo<?>.Preset preset) {
         Hud.get().add(preset, x, y);
+        Hud.get().active = true;
         close();
     }
 
@@ -91,6 +92,7 @@ public class LunarAddHudScreen extends WindowScreen {
             mc.setScreen(screen);
         } else {
             Hud.get().add(info, x, y);
+            Hud.get().active = true;
             close();
         }
     }

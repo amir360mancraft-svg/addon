@@ -14,6 +14,7 @@ import meteordevelopment.meteorclient.settings.StringListSetting;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
+import com.blockoutlines.addon.util.HudHook;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.entity.player.PlayerEntity;
@@ -245,7 +246,7 @@ public class AdminHud extends Module {
     @EventHandler
     private void onRender2D(Render2DEvent event) {
         if (mc.player == null || mc.world == null) return;
-        if (rows.isEmpty() && !showEmpty.get()) return;
+        if (rows.isEmpty() && !showEmpty.get() && !HudHook.editing()) return;
 
         DrawContext ctx = event.drawContext;
         var tr = mc.textRenderer;
@@ -282,6 +283,9 @@ public class AdminHud extends Module {
         float x = (corner.get() == Corner.TopLeft || corner.get() == Corner.BottomLeft) ? offX.get() : sw - offX.get() - pw;
         float y = (corner.get() == Corner.TopLeft || corner.get() == Corner.TopRight) ? offY.get() : sh - offY.get() - ph;
 
+        HudHook.mark("Admin HUD", Math.round(x), Math.round(y), Math.round(pw), Math.round(ph));
+        handleDrag(x, y, pw, ph, sw, sh);
+
         ctx.getMatrices().pushMatrix();
         ctx.getMatrices().translate(x, y);
         ctx.getMatrices().scale(s, s);
@@ -304,6 +308,36 @@ public class AdminHud extends Module {
         if (rows.size() > shown) ctx.drawText(tr, "+" + (rows.size() - shown) + " more", tx, ty, 0xFFAAAAAA, true);
 
         ctx.getMatrices().popMatrix();
+    }
+
+    private boolean dragging;
+    private double grabX, grabY;
+
+    /** Drag the panel (hub or chat open): moves it by changing the offsets from its corner. */
+    private void handleDrag(float x, float y, float pw, float ph, int sw, int sh) {
+        if (!HudHook.editing()) {
+            dragging = false;
+            return;
+        }
+        double mx = mc.mouse.getX() * sw / (double) mc.getWindow().getWidth();
+        double my = mc.mouse.getY() * sh / (double) mc.getWindow().getHeight();
+        boolean down = org.lwjgl.glfw.GLFW.glfwGetMouseButton(mc.getWindow().getHandle(), org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT) == org.lwjgl.glfw.GLFW.GLFW_PRESS;
+        if (!down) {
+            dragging = false;
+            return;
+        }
+        if (!dragging) {
+            if (mx < x || mx > x + pw || my < y || my > y + ph) return;
+            dragging = true;
+            grabX = mx - x;
+            grabY = my - y;
+        }
+        double nx = Math.max(0, Math.min(sw - pw, mx - grabX));
+        double ny = Math.max(0, Math.min(sh - ph, my - grabY));
+        boolean left = corner.get() == Corner.TopLeft || corner.get() == Corner.BottomLeft;
+        boolean top = corner.get() == Corner.TopLeft || corner.get() == Corner.TopRight;
+        offX.set((int) Math.round(left ? nx : sw - pw - nx));
+        offY.set((int) Math.round(top ? ny : sh - ph - ny));
     }
 
     private static int argb(SettingColor c, int alpha) {

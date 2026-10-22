@@ -6,6 +6,7 @@ import com.blockoutlines.addon.modules.AdminHud;
 import com.blockoutlines.addon.modules.ArmorTrimChanger;
 import com.blockoutlines.addon.modules.AutoTrident;
 import com.blockoutlines.addon.modules.BaseFinder;
+import com.blockoutlines.addon.modules.BetterSpotifyHud;
 import com.blockoutlines.addon.modules.BlockOutlines;
 import com.blockoutlines.addon.modules.ChinaHat;
 import com.blockoutlines.addon.modules.ColorGrading;
@@ -104,6 +105,7 @@ public class BlockOutlinesAddon extends MeteorAddon {
         Modules.get().add(new AdminHud());
         Modules.get().add(new DynamicIsland());
         Modules.get().add(new DeathEcho());
+        Modules.get().add(new BetterSpotifyHud());
         Modules.get().add(new SwingSpeed());
         Modules.get().add(new MenuBackground());
         LOG.info("Better Render loaded");

@@ -1,6 +1,7 @@
 package com.blockoutlines.addon.modules;
 
 import com.blockoutlines.addon.BlockOutlinesAddon;
+import com.blockoutlines.addon.util.HudHook;
 import com.blockoutlines.addon.util.RoundRect;
 import meteordevelopment.meteorclient.events.render.Render2DEvent;
 import meteordevelopment.meteorclient.settings.BoolSetting;
@@ -113,6 +114,7 @@ public class RegionMap extends Module {
         handleDrag(x, y, width, height, sw, sh);
         x = resolve(hudX.get(), sw, width, true);
         y = resolve(hudY.get(), sh, height, false);
+        HudHook.mark("Region Map", x, y, width, height);
 
         DrawContext ctx = event.drawContext;
         RoundRect.outlined(ctx, x, y, width, height, Math.max(3, px(10, s)), BACKGROUND, BORDER);
@@ -196,7 +198,7 @@ public class RegionMap extends Module {
     }
 
     private void handleDrag(int x, int y, int w, int h, int sw, int sh) {
-        if (!(mc.currentScreen instanceof ChatScreen)) {
+        if (!HudHook.editing()) {
             dragging = false;
             return;
         }

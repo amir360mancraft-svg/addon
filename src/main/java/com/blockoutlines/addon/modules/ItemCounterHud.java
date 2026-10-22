@@ -1,6 +1,7 @@
 package com.blockoutlines.addon.modules;
 
 import com.blockoutlines.addon.BlockOutlinesAddon;
+import com.blockoutlines.addon.util.HudHook;
 import com.blockoutlines.addon.util.RoundRect;
 import meteordevelopment.meteorclient.events.render.Render2DEvent;
 import meteordevelopment.meteorclient.settings.BoolSetting;
@@ -170,7 +171,7 @@ public class ItemCounterHud extends Module {
         PlayerInventory inv = mc.player.getInventory();
         for (Item item : items.get()) {
             int n = count(inv, item);
-            if (hideEmpty.get() && n == 0) continue;
+            if (hideEmpty.get() && n == 0 && !HudHook.editing()) continue;
             list.add(new Entry(item, n));
         }
         if (list.isEmpty()) return;
@@ -197,16 +198,21 @@ public class ItemCounterHud extends Module {
         int gw = Math.round(groupW * s), gh = Math.round(groupH * s);
 
         int gx, gy;
+        int baseX = 0, baseY = 0; // the position before the offsets are added
         switch (place.get()) {
             case RightOfHotbar -> {
                 boolean leftHanded = mc.options.getMainArm().getValue() == Arm.LEFT;
-                gx = sw / 2 + 91 + (leftHanded ? 29 : 0) + 8 + offsetX.get();
-                gy = sh - 2 - gh + offsetY.get();
+                baseX = sw / 2 + 91 + (leftHanded ? 29 : 0) + 8;
+                baseY = sh - 2 - gh;
+                gx = baseX + offsetX.get();
+                gy = baseY + offsetY.get();
             }
             case LeftOfHotbar -> {
                 boolean leftHanded = mc.options.getMainArm().getValue() == Arm.LEFT;
-                gx = sw / 2 - 91 - (leftHanded ? 0 : 29) - 8 - gw + offsetX.get();
-                gy = sh - 2 - gh + offsetY.get();
+                baseX = sw / 2 - 91 - (leftHanded ? 0 : 29) - 8 - gw;
+                baseY = sh - 2 - gh;
+                gx = baseX + offsetX.get();
+                gy = baseY + offsetY.get();
             }
             default -> {
                 gx = offsetX.get();
@@ -215,6 +221,10 @@ public class ItemCounterHud extends Module {
         }
         gx = Math.max(0, Math.min(sw - gw, gx));
         gy = Math.max(0, Math.min(sh - gh, gy));
+        if (!separate) {
+            handleGroupDrag(gx, gy, gw, gh, baseX, baseY, sw, sh);
+            HudHook.mark("Item Counter", gx, gy, gw, gh);
+        }
 
         // positions of every panel on the screen
         int uw = Math.round(unitW * s), uh = Math.round(unitH * s), step = Math.round(GAP * s);
@@ -235,6 +245,7 @@ public class ItemCounterHud extends Module {
                 e.y = Math.max(0, Math.min(sh - uh, e.y));
             }
             handleDrag(list, sw, sh);
+            for (int i = 0; i < n; i++) HudHook.mark("Item " + (i + 1), list.get(i).x, list.get(i).y, list.get(i).w, list.get(i).h);
         }
 
         DrawContext ctx = event.drawContext;
@@ -322,7 +333,7 @@ public class ItemCounterHud extends Module {
     // ------------------------------------------------------------------ dragging (chat open)
 
     private void handleDrag(List<Entry> list, int sw, int sh) {
-        if (!(mc.currentScreen instanceof ChatScreen)) {
+        if (!HudHook.editing()) {
             if (dragging != null) save();
             dragging = null;
             return;
@@ -357,6 +368,33 @@ public class ItemCounterHud extends Module {
                 break;
             }
         }
+    }
+
+    private boolean groupDragging;
+
+    /** Together mode: dragging the one panel changes its offsets. */
+    private void handleGroupDrag(int gx, int gy, int gw, int gh, int baseX, int baseY, int sw, int sh) {
+        if (!HudHook.editing()) {
+            groupDragging = false;
+            return;
+        }
+        double mx = mc.mouse.getX() * sw / (double) mc.getWindow().getWidth();
+        double my = mc.mouse.getY() * sh / (double) mc.getWindow().getHeight();
+        boolean down = GLFW.glfwGetMouseButton(mc.getWindow().getHandle(), GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS;
+        if (!down) {
+            groupDragging = false;
+            return;
+        }
+        if (!groupDragging) {
+            if (mx < gx || mx > gx + gw || my < gy || my > gy + gh) return;
+            groupDragging = true;
+            grabX = mx - gx;
+            grabY = my - gy;
+        }
+        int nx = Math.max(0, Math.min(sw - gw, (int) (mx - grabX)));
+        int ny = Math.max(0, Math.min(sh - gh, (int) (my - grabY)));
+        offsetX.set(nx - baseX);
+        offsetY.set(ny - baseY);
     }
 
     private void save() {

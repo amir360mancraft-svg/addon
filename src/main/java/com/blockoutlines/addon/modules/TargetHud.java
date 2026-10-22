@@ -1,6 +1,7 @@
 package com.blockoutlines.addon.modules;
 
 import com.blockoutlines.addon.BlockOutlinesAddon;
+import com.blockoutlines.addon.util.HudHook;
 import com.blockoutlines.addon.util.RoundRect;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
@@ -209,7 +210,7 @@ public class TargetHud extends Module {
         }
 
         boolean info = target != null;
-        if (!info && !showSelf.get()) return;
+        if (!info && !showSelf.get() && !HudHook.editing()) return;
         PlayerEntity who = info ? target : mc.player;
 
         boolean model = showModel.get();
@@ -254,6 +255,7 @@ public class TargetHud extends Module {
             x = Math.max(0, Math.min(sw - pw, dragX.get()));
             y = Math.max(0, Math.min(sh - ph, dragY.get()));
         }
+        HudHook.mark("Target HUD", x, y, pw, ph);
 
         DrawContext ctx = event.drawContext;
         ctx.getMatrices().pushMatrix();
@@ -440,7 +442,7 @@ public class TargetHud extends Module {
     // ------------------------------------------------------------------ dragging (chat open)
 
     private void handleDrag(int x, int y, int w, int h, int sw, int sh) {
-        if (!(mc.currentScreen instanceof ChatScreen) || !keepDragged.get()) {
+        if (!HudHook.editing() || !keepDragged.get()) {
             dragging = false;
             return;
         }
