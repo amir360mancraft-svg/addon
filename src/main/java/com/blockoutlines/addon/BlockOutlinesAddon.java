@@ -14,6 +14,7 @@ import com.blockoutlines.addon.modules.DeathEcho;
 import com.blockoutlines.addon.modules.DynamicIsland;
 import com.blockoutlines.addon.modules.CustomCrosshair;
 import com.blockoutlines.addon.modules.FakeElytra;
+import com.blockoutlines.addon.modules.Fireflies;
 import com.blockoutlines.addon.modules.LightChunkFinder;
 import com.blockoutlines.addon.modules.NetheriteFinder;
 import com.blockoutlines.addon.modules.OgChunkFinder;
@@ -110,6 +111,7 @@ public class BlockOutlinesAddon extends MeteorAddon {
         Modules.get().add(new BetterSpotifyHud());
         Modules.get().add(new SwingSpeed());
         Modules.get().add(new MenuBackground());
+        Modules.get().add(new Fireflies());
         LOG.info("Better Render loaded");
     }
 
