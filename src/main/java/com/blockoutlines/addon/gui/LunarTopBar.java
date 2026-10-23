@@ -16,7 +16,11 @@ import java.util.Locale;
 import static meteordevelopment.meteorclient.MeteorClient.mc;
 import static org.lwjgl.glfw.GLFW.glfwSetCursorPos;
 
-/** The row of tabs at the top: floating round chips instead of Meteor's bar. The active tab is filled with the accent color. */
+/**
+ * The row of tabs at the top: floating rounded chips styled like Lunar Client.
+ * Displays crisp vector glyph icons for each tab (MODS, CONFIG, HUD, FRIENDS, MACROS, PROFILES, LUNAR).
+ * Can display Icon + Text or minimal Icon Only based on the theme setting.
+ */
 public class LunarTopBar extends WTopBar {
     @Override
     protected Color getButtonColor(boolean pressed, boolean hovered) {
@@ -63,8 +67,19 @@ public class LunarTopBar extends WTopBar {
         @Override
         protected void onCalculateSize() {
             double pad = pad();
-            width = theme.textWidth(label(tab)) + pad * 3.2;
-            height = theme.textHeight() + pad * 1.7;
+            double u = theme.scale(1);
+            boolean showText = theme instanceof LunarGuiTheme lt ? lt.topBarText.get() : true;
+            double iconSz = 11.5 * u;
+
+            if (showText) {
+                double gap = 6.0 * u;
+                width = iconSz + gap + theme.textWidth(label(tab)) + pad * 2.8;
+                tooltip = null;
+            } else {
+                width = iconSz + pad * 2.6;
+                tooltip = label(tab);
+            }
+            height = theme.textHeight() + pad * 1.8;
         }
 
         @Override
@@ -92,13 +107,37 @@ public class LunarTopBar extends WTopBar {
             int[] ac = lt.accent();
             var pc = lt.panelColor.get();
             double rad = Math.min(height / 2, lt.cornerRadius.get() * 0.9 * theme.scale(1));
+
+            // Background & Border
             LunarDraw.round(r, x - 1, y - 1, width + 2, height + 2, rad + 1, LunarDraw.col(255, 255, 255, 26));
             LunarDraw.round(r, x, y, width, height, rad, LunarDraw.col(pc.r, pc.g, pc.b, Math.max(200, pc.a)));
-            if (h > 0.01) LunarDraw.round(r, x, y, width, height, rad, LunarDraw.col(255, 255, 255, 22 * h * (1 - a)));
+            if (h > 0.01) LunarDraw.round(r, x, y, width, height, rad, LunarDraw.col(255, 255, 255, 24 * h * (1 - a)));
             if (a > 0.01) LunarDraw.round(r, x, y, width, height, rad, LunarDraw.col(ac[0], ac[1], ac[2], 255 * a));
 
             String s = label(tab);
-            r.text(s, x + (width - theme.textWidth(s)) / 2, y + (height - theme.textHeight()) / 2, LunarDraw.col(255, 255, 255, 235 + 20 * a), false);
+            boolean showText = lt.topBarText.get();
+            double u = theme.scale(1);
+            double iconSz = 11.0 * u;
+            double gap = 6.0 * u;
+
+            double contentW = showText ? (iconSz + gap + theme.textWidth(s)) : iconSz;
+            double contentX = x + (width - contentW) / 2;
+            double cy = y + height / 2;
+
+            // Smoothly blended background behind icon cut-out
+            int bgR = (int) Math.round(pc.r + (ac[0] - pc.r) * a);
+            int bgG = (int) Math.round(pc.g + (ac[1] - pc.g) * a);
+            int bgB = (int) Math.round(pc.b + (ac[2] - pc.b) * a);
+            Color iconBg = LunarDraw.col(bgR, bgG, bgB, 255);
+            Color iconColor = a > 0.01 ? LunarDraw.col(255, 255, 255, 255) : LunarDraw.col(230, 238, 250, (int) (180 + 75 * h));
+
+            // Draw Glyph Icon
+            LunarGlyph.draw(r, label(tab), contentX + iconSz / 2, cy, iconSz, iconColor, iconBg);
+
+            // Draw Label text if enabled
+            if (showText) {
+                r.text(s, contentX + iconSz + gap, cy - theme.textHeight() / 2, LunarDraw.col(255, 255, 255, (int) (215 + 40 * a)), false);
+            }
         }
     }
 }

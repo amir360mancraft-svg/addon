@@ -80,6 +80,11 @@ public class LunarGuiTheme extends MeteorGuiTheme {
         .name("show-hub").description("Right Shift opens the hub (move your HUD, then pick what to edit) before the module list.")
         .defaultValue(true).build());
 
+    /** Whether the top bar chips show text labels next to their icons. */
+    public final Setting<Boolean> topBarText = sgLunar.add(new BoolSetting.Builder()
+        .name("topbar-text").description("Show text next to the icons in the top bar chips.")
+        .defaultValue(true).build());
+
     /** The single instance, so the plain Minecraft screens can read the colors too. */
     public static LunarGuiTheme INSTANCE;
 

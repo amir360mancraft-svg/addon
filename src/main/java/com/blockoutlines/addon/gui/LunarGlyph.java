@@ -33,7 +33,7 @@ final class LunarGlyph {
         key = key.toLowerCase(Locale.ROOT);
         double u = s / 10.0;
 
-        if (has(key, "mods", "module-info", "inventory")) {
+        if (has(key, "mods", "module", "inventory")) {
             for (double dx : new double[]{-2.8, 0.3})
                 for (double dy : new double[]{-2.8, 0.3}) box(r, cx, cy, u, dx, dy, 2.5, 2.5, 0.8, c);
             if (!has(key, "inventory", "info")) {

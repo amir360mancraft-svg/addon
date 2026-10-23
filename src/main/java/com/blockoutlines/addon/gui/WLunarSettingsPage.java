@@ -240,6 +240,7 @@ public class WLunarSettingsPage extends LunarCanvas {
         y = sliderRow(r, y, 2, "Corner radius", "How round cards, buttons and panels are.", a, u, delta);
         y = sliderRow(r, y, 3, "Panel size", "Makes the module panel bigger or smaller.", a, u, delta);
         y = toggleRow(r, y, 0, "Module icons", "Small icons on the cards of the Better Render modules.", lunar().showIcons.get(), a, u, delta);
+        y = toggleRow(r, y, 2, "Top bar text", "Show text labels next to the icons in the top bar chips.", lunar().topBarText.get(), a, u, delta);
         return y;
     }
 
