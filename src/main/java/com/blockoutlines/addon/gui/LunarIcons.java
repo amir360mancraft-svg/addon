@@ -51,6 +51,8 @@ sign|q -0.95 -0.85 1.9 1.1 f|q -0.1 0.2 0.2 0.8 f|s -0.6 -0.5 0.6 -0.5 0.12 b|s 
 trail|c 0.7 -0.6 0.9 f|c 0.2 -0.2 0.7 f|c -0.25 0.2 0.5 h|c -0.7 0.6 0.32 h
 apple|c -0.3 0.2 1.35 f|c 0.3 0.2 1.35 f|t 0.05 -0.45 0.75 -0.95 0.5 -0.35 y
 sword|s -0.75 0.75 0.7 -0.7 0.26 f|s -0.7 0.15 -0.15 0.7 0.2 f|s -0.9 0.9 -0.5 0.5 0.2 h
+firefly|c 0 0 1.85 h|c 0 0 1.05 f|c 0 0 0.55 w|c 0.95 -0.8 0.38 f|c -0.95 0.75 0.3 f|c 0.8 0.85 0.22 h
+beam|q -0.42 -1 0.84 1.55 h|q -0.16 -1 0.32 1.55 f|e 0 0.72 2.0 0.5 f|e 0 0.72 1.2 0.24 b|p 0 0.72 4 0.34 0.12 0 w
 hud|q -0.95 -0.8 1.9 1.6 f|q -0.8 -0.65 1.6 1.3 b|c -0.45 -0.2 0.6 f|q -0.05 -0.4 0.8 0.15 f|q -0.05 -0.05 0.55 0.15 h|q -0.6 0.3 1.2 0.2 f
 """;
 
@@ -64,7 +66,7 @@ hud|q -0.95 -0.8 1.9 1.6 f|q -0.8 -0.65 1.6 1.3 b|c -0.45 -0.2 0.6 f|q -0.05 -0.
         {"kill-effect", "bolt"}, {"item-counter-hud", "box"}, {"item-drop-physics", "box"}, {"jump-circle", "ring"},
         {"menu-background", "picture"}, {"no-water", "nodrop"}, {"pets", "paw"}, {"player-signs", "sign"},
         {"player-trail", "trail"}, {"projectile-trails", "trail"}, {"saturation", "apple"}, {"swing-speed", "sword"},
-        {"target-hud", "hud"},
+        {"target-hud", "hud"}, {"fireflies", "firefly"}, {"loot-beams", "beam"},
     };
 
     private record Cmd(char kind, double[] v, char color) {}
