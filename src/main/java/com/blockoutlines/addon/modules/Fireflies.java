@@ -71,6 +71,12 @@ public class Fireflies extends Module {
         .name("brightness").description("How bright the lights are at their brightest.").defaultValue(230).range(30, 255).sliderRange(60, 255).build());
     private final Setting<Double> pulse = sgLook.add(new DoubleSetting.Builder()
         .name("pulse-speed").description("How fast they switch on and off.").defaultValue(1.0).range(0.3, 3.0).sliderRange(0.3, 2.5).build());
+    private final Setting<Boolean> tail = sgLook.add(new BoolSetting.Builder()
+        .name("glowing-tail").description("A short fading tail of light behind every light.").defaultValue(true).build());
+    private final Setting<Boolean> flare = sgLook.add(new BoolSetting.Builder()
+        .name("light-streak").description("A thin horizontal streak of light through the brightest lights, like a camera lens.").defaultValue(true).build());
+    private final Setting<Boolean> groundGlow = sgLook.add(new BoolSetting.Builder()
+        .name("ground-glow").description("The lights softly light up the ground under them.").defaultValue(true).build());
     private final Setting<Double> camFade = sgLook.add(new DoubleSetting.Builder()
         .name("camera-fade").description("Lights closer than this to your eyes fade out so they never cover your view (blocks).")
         .defaultValue(1.5).range(0.0, 6.0).sliderRange(0.0, 5.0).build());
@@ -90,9 +96,13 @@ public class Fireflies extends Module {
         double x, y, z;
         double yaw, pitch, tYaw, tPitch, turnIn;
         double speed, phase, period, hue, bob;
-        double age, life, homeY, rehomeIn;
+        double age, life, homeY, rehomeIn, groundY, trailT;
         boolean dust, alive;
+        final double[] tx = new double[TAIL], ty = new double[TAIL], tz = new double[TAIL];
+        int tn;
     }
+
+    private static final int TAIL = 12;
 
     private final List<Fly> flies = new ArrayList<>();
     private final Random rng = new Random();
@@ -103,7 +113,7 @@ public class Fireflies extends Module {
     private double intensity;  // 0..1 smoothed, so they fade in and out
 
     // camera frame (set every frame)
-    private double rx, ry, rz, ux, uy, uz;
+    private double rx, ry, rz, ux, uy, uz, fwx, fwy, fwz;
     private double camX, camY, camZ;
 
     public Fireflies() {
@@ -197,6 +207,7 @@ public class Fireflies extends Module {
             double d = initial ? r * Math.sqrt(rng.nextDouble()) : r * (0.7 + 0.3 * rng.nextDouble());
             double x = px + Math.cos(ang) * d, z = pz + Math.sin(ang) * d;
             double y, home;
+            double ground = Double.NaN;
 
             if (f.dust) {
                 y = py + 0.3 + rng.nextDouble() * 3.5;
@@ -204,6 +215,7 @@ public class Fireflies extends Module {
             } else {
                 double gy = groundY(x, py + 3.0 + rng.nextDouble() * 3.0, z, 12);
                 if (Double.isNaN(gy) || Math.abs(gy - py) > 10) continue;
+                ground = gy;
                 home = gy + 0.4 + rng.nextDouble() * hover.get();
                 y = home;
             }
@@ -227,6 +239,9 @@ public class Fireflies extends Module {
             f.life = f.dust ? 5.0 + rng.nextDouble() * 5.0 : 35.0 + rng.nextDouble() * 50.0;
             if (initial && f.age > f.life - 3) f.age = 0;
             f.rehomeIn = 1.0 + rng.nextDouble();
+            f.groundY = ground;
+            f.tn = 0;
+            f.trailT = 0;
             f.alive = true;
             return;
         }
@@ -267,7 +282,10 @@ public class Fireflies extends Module {
             if (f.rehomeIn <= 0) {
                 f.rehomeIn = 1.2;
                 double gy = groundY(nx, ny + 2.0, nz, 10);
-                if (!Double.isNaN(gy)) f.homeY = gy + 0.4 + rng.nextDouble() * hover.get();
+                if (!Double.isNaN(gy)) {
+                    f.homeY = gy + 0.4 + rng.nextDouble() * hover.get();
+                    f.groundY = gy;
+                }
             }
         }
 
@@ -275,12 +293,30 @@ public class Fireflies extends Module {
             f.x = nx;
             f.y = ny;
             f.z = nz;
+            pushTail(f, dt);
         } else {
             // a block is in the way: turn around
             f.yaw += Math.PI * (0.6 + rng.nextDouble() * 0.8);
             f.tYaw = f.yaw;
             f.turnIn = 0.6;
         }
+    }
+
+    /** Remembers where the light was a moment ago, for its tail. */
+    private void pushTail(Fly f, double dt) {
+        f.trailT += dt;
+        if (f.trailT < 0.05) return;
+        f.trailT = 0;
+        int n = Math.min(f.tn, TAIL - 1);
+        for (int i = n; i > 0; i--) {
+            f.tx[i] = f.tx[i - 1];
+            f.ty[i] = f.ty[i - 1];
+            f.tz[i] = f.tz[i - 1];
+        }
+        f.tx[0] = f.x;
+        f.ty[0] = f.y;
+        f.tz[0] = f.z;
+        f.tn = n + 1;
     }
 
     /** How lit the light is right now, 0..1. Fireflies switch fully on and off, dust twinkles. */
@@ -326,6 +362,9 @@ public class Fireflies extends Module {
         ux = ry * fz - rz * fy;
         uy = rz * fx - rx * fz;
         uz = rx * fy - ry * fx;
+        fwx = fx;
+        fwy = fy;
+        fwz = fz;
         camX = event.offsetX;
         camY = event.offsetY;
         camZ = event.offsetZ;
@@ -351,16 +390,27 @@ public class Fireflies extends Module {
     }
 
     private void draw(Renderer3D r, Fly f, double secs, int alpha, double b) {
-        Color c = color(f, secs, alpha);
-        double core = 0.045 * size.get();
-        double rad = core * 6.0 * glow.get();
+        Color c = color(f, secs, alpha, 0);
+        Color edge = color(f, secs, alpha, f.dust ? -0.06 : 0.035); // the outer light is a little greener / pinker
+        double breathe = 0.85 + 0.15 * b;
+        double core = 0.045 * size.get() * breathe;
+        double rad = core * 6.5 * glow.get();
 
-        // soft light around it, then a brighter inner light
-        halo(r, f.x, f.y, f.z, rad, new Color(c.r, c.g, c.b, (int) (alpha * 0.45)));
-        halo(r, f.x, f.y, f.z, rad * 0.45, new Color(c.r, c.g, c.b, (int) (alpha * 0.8)));
+        if (tail.get() && f.tn > 1) drawTail(r, f, core, alpha, c);
 
-        // the hot core, a little closer to white
-        Color hot = CosmeticUtil.lerp(c, new Color(255, 255, 255, alpha), 0.6, alpha);
+        if (groundGlow.get() && !f.dust && !Double.isNaN(f.groundY) && f.y - f.groundY < 4.5) {
+            double near = 1.0 - (f.y - f.groundY) / 4.5;
+            int ga = (int) (alpha * 0.30 * near * near);
+            if (ga > 2) groundDisc(r, f.x, f.groundY + 0.03, f.z, rad * 1.8, new Color(c.r, c.g, c.b, ga));
+        }
+
+        // soft light, widest first, each layer warmer and brighter toward the middle
+        halo(r, f.x, f.y, f.z, rad * 1.5, new Color(edge.r, edge.g, edge.b, (int) (alpha * 0.30)));
+        halo(r, f.x, f.y, f.z, rad * 0.8, new Color(c.r, c.g, c.b, (int) (alpha * 0.55)));
+        halo(r, f.x, f.y, f.z, rad * 0.38, new Color(c.r, c.g, c.b, (int) (alpha * 0.9)));
+
+        // the hot core, almost white
+        Color hot = CosmeticUtil.lerp(c, new Color(255, 255, 255, alpha), 0.75, alpha);
         quad(r,
             f.x - rx * core - ux * core, f.y - ry * core - uy * core, f.z - rz * core - uz * core,
             f.x + rx * core - ux * core, f.y + ry * core - uy * core, f.z + rz * core - uz * core,
@@ -368,34 +418,121 @@ public class Fireflies extends Module {
             f.x - rx * core + ux * core, f.y - ry * core + uy * core, f.z - rz * core + uz * core,
             hot, hot, hot, hot);
 
-        // magic dust sparkles with four soft spikes
+        Color tip = new Color(c.r, c.g, c.b, 0);
+        Color mid = new Color(hot.r, hot.g, hot.b, (int) (alpha * 0.85));
+
         if (f.dust) {
-            double len = rad * (1.4 + 1.2 * b), w = core * 0.5;
-            Color tip = new Color(c.r, c.g, c.b, 0);
-            Color mid = new Color(hot.r, hot.g, hot.b, (int) (alpha * 0.9));
-            spike(r, f, rx, ry, rz, ux, uy, uz, len, w, mid, tip);
-            spike(r, f, -rx, -ry, -rz, ux, uy, uz, len, w, mid, tip);
-            spike(r, f, ux, uy, uz, rx, ry, rz, len * 0.8, w, mid, tip);
-            spike(r, f, -ux, -uy, -uz, rx, ry, rz, len * 0.8, w, mid, tip);
+            // magic dust: a slowly turning four-point star with four shorter spikes between
+            double len = rad * (1.5 + 1.3 * b), w = core * 0.45;
+            double ang = secs * 0.9 + f.phase;
+            for (int i = 0; i < 4; i++) {
+                double a1 = ang + i * Math.PI / 2;
+                spike(r, f, a1, len, w, mid, tip);
+            }
+            Color mid2 = new Color(hot.r, hot.g, hot.b, (int) (alpha * 0.5));
+            for (int i = 0; i < 4; i++) spike(r, f, ang + Math.PI / 4 + i * Math.PI / 2, len * 0.5, w * 0.8, mid2, tip);
+        } else if (flare.get() && b > 0.55) {
+            // fireflies: a thin streak of light that only shows when they glow brightly
+            double k = (b - 0.55) / 0.45;
+            Color fm = new Color(hot.r, hot.g, hot.b, (int) (alpha * 0.55 * k));
+            double len = rad * (1.3 + 1.6 * k), w = core * 0.35;
+            spike(r, f, 0, len, w, fm, tip);
+            spike(r, f, Math.PI, len, w, fm, tip);
         }
     }
 
-    /** A round soft light facing the camera: the color in the middle, clear at the edge. */
+    /** A fading ribbon along the places the light just was. */
+    private void drawTail(Renderer3D r, Fly f, double core, int alpha, Color c) {
+        int n = f.tn;
+        double px = f.x, py = f.y, pz = f.z;
+        double pw = core * 0.9;
+        int pa = (int) (alpha * 0.55);
+        for (int i = 0; i < n; i++) {
+            double t = (i + 1) / (double) (TAIL + 1);
+            double qx = f.tx[i], qy = f.ty[i], qz = f.tz[i];
+            double qw = core * 0.9 * (1.0 - t);
+            int qa = (int) (alpha * 0.55 * Math.pow(1.0 - t, 1.6));
+
+            // the ribbon is wide in the direction that faces the camera: cross(segment, forward)
+            double sx = qx - px, sy = qy - py, sz = qz - pz;
+            double ox = sy * fwz - sz * fwy, oy = sz * fwx - sx * fwz, oz = sx * fwy - sy * fwx;
+            double ol = Math.sqrt(ox * ox + oy * oy + oz * oz);
+            if (ol < 1e-9) {
+                ox = rx;
+                oy = ry;
+                oz = rz;
+            } else {
+                ox /= ol;
+                oy /= ol;
+                oz /= ol;
+            }
+            Color ca = new Color(c.r, c.g, c.b, Math.max(0, pa));
+            Color cb = new Color(c.r, c.g, c.b, Math.max(0, qa));
+            quad(r,
+                px - ox * pw, py - oy * pw, pz - oz * pw,
+                px + ox * pw, py + oy * pw, pz + oz * pw,
+                qx + ox * qw, qy + oy * qw, qz + oz * qw,
+                qx - ox * qw, qy - oy * qw, qz - oz * qw,
+                ca, ca, cb, cb);
+            px = qx;
+            py = qy;
+            pz = qz;
+            pw = qw;
+            pa = qa;
+        }
+    }
+
+    /** A round soft light facing the camera. Several rings with a smooth fall-off, so there is no hard edge. */
     private void halo(Renderer3D r, double x, double y, double z, double rad, Color c) {
-        Color z0 = new Color(c.r, c.g, c.b, 0);
-        int n = 10;
+        int n = 12, rings = 3;
         for (int i = 0; i < n; i++) {
             double a0 = Math.PI * 2 * i / n, a1 = Math.PI * 2 * (i + 1) / n;
-            double c0 = Math.cos(a0) * rad, s0 = Math.sin(a0) * rad, c1 = Math.cos(a1) * rad, s1 = Math.sin(a1) * rad;
-            quad(r, x, y, z, x, y, z,
-                x + rx * c1 + ux * s1, y + ry * c1 + uy * s1, z + rz * c1 + uz * s1,
-                x + rx * c0 + ux * s0, y + ry * c0 + uy * s0, z + rz * c0 + uz * s0,
-                c, c, z0, z0);
+            double c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
+            for (int k = 0; k < rings; k++) {
+                double t0 = k / (double) rings, t1 = (k + 1) / (double) rings;
+                double r0 = rad * t0, r1 = rad * t1;
+                Color in = fall(c, t0), out = fall(c, t1);
+                quad(r,
+                    x + rx * c0 * r0 + ux * s0 * r0, y + ry * c0 * r0 + uy * s0 * r0, z + rz * c0 * r0 + uz * s0 * r0,
+                    x + rx * c1 * r0 + ux * s1 * r0, y + ry * c1 * r0 + uy * s1 * r0, z + rz * c1 * r0 + uz * s1 * r0,
+                    x + rx * c1 * r1 + ux * s1 * r1, y + ry * c1 * r1 + uy * s1 * r1, z + rz * c1 * r1 + uz * s1 * r1,
+                    x + rx * c0 * r1 + ux * s0 * r1, y + ry * c0 * r1 + uy * s0 * r1, z + rz * c0 * r1 + uz * s0 * r1,
+                    in, in, out, out);
+            }
         }
     }
 
-    private void spike(Renderer3D r, Fly f, double dx, double dy, double dz, double px, double py, double pz,
-                       double len, double w, Color mid, Color tip) {
+    /** A flat soft disc lying on the ground. */
+    private void groundDisc(Renderer3D r, double x, double y, double z, double rad, Color c) {
+        int n = 12, rings = 3;
+        for (int i = 0; i < n; i++) {
+            double a0 = Math.PI * 2 * i / n, a1 = Math.PI * 2 * (i + 1) / n;
+            double c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
+            for (int k = 0; k < rings; k++) {
+                double t0 = k / (double) rings, t1 = (k + 1) / (double) rings;
+                double r0 = rad * t0, r1 = rad * t1;
+                Color in = fall(c, t0), out = fall(c, t1);
+                quad(r,
+                    x + c0 * r0, y, z + s0 * r0,
+                    x + c1 * r0, y, z + s1 * r0,
+                    x + c1 * r1, y, z + s1 * r1,
+                    x + c0 * r1, y, z + s0 * r1,
+                    in, in, out, out);
+            }
+        }
+    }
+
+    /** Smooth fall-off from the middle (t = 0) to the edge (t = 1). */
+    private static Color fall(Color c, double t) {
+        double k = Math.exp(-3.2 * t * t) - 0.04 * t;
+        return new Color(c.r, c.g, c.b, (int) (c.a * Math.max(0.0, Math.min(1.0, k))));
+    }
+
+    /** A thin soft spike out of the light. {@code angle} turns it around the view direction (0 = to the right). */
+    private void spike(Renderer3D r, Fly f, double angle, double len, double w, Color mid, Color tip) {
+        double ca = Math.cos(angle), sa = Math.sin(angle);
+        double dx = rx * ca + ux * sa, dy = ry * ca + uy * sa, dz = rz * ca + uz * sa;
+        double px = -rx * sa + ux * ca, py = -ry * sa + uy * ca, pz = -rz * sa + uz * ca;
         quad(r,
             f.x - px * w, f.y - py * w, f.z - pz * w,
             f.x + px * w, f.y + py * w, f.z + pz * w,
@@ -404,14 +541,15 @@ public class Fireflies extends Module {
             mid, mid, tip, tip);
     }
 
-    private Color color(Fly f, double secs, int alpha) {
+    /** {@code shift} moves the hue a little (used for the outer part of the light). */
+    private Color color(Fly f, double secs, int alpha, double shift) {
         return switch (palette.get()) {
-            case Rainbow -> CosmeticUtil.hsv(secs * rainbowSpeed.get() * 0.08 + f.hue * 0.4, 0.65f, 1f, alpha);
+            case Rainbow -> CosmeticUtil.hsv(secs * rainbowSpeed.get() * 0.08 + f.hue * 0.4 + shift, 0.65f, 1f, alpha);
             case Custom -> {
                 SettingColor c = customColor.get();
                 yield new Color(c.r, c.g, c.b, alpha);
             }
-            default -> CosmeticUtil.hsv(f.hue, f.dust ? 0.5f : 0.72f, 1f, alpha);
+            default -> CosmeticUtil.hsv(f.hue + shift, f.dust ? 0.5f : 0.72f, 1f, alpha);
         };
     }
 
