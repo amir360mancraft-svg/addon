@@ -36,7 +36,7 @@ public class LunarTopBar extends WTopBar {
     public void init() {
         spacing = 6;
         for (Tab tab : Tabs.get()) {
-            if (tab instanceof GuiTab) continue; // the theme picker, the Lunar tab replaces it
+            // the GUI tab (theme picker) stays visible so you can always switch back to the Meteor theme
             add(new Chip(tab)).centerY();
         }
     }

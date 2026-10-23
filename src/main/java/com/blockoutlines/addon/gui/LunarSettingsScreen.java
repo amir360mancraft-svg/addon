@@ -3,6 +3,7 @@ package com.blockoutlines.addon.gui;
 import meteordevelopment.meteorclient.gui.GuiTheme;
 import meteordevelopment.meteorclient.gui.GuiThemes;
 import meteordevelopment.meteorclient.gui.tabs.Tab;
+import meteordevelopment.meteorclient.gui.tabs.Tabs;
 import meteordevelopment.meteorclient.gui.tabs.WindowTabScreen;
 import meteordevelopment.meteorclient.gui.widgets.containers.WHorizontalList;
 import meteordevelopment.meteorclient.gui.widgets.pressable.WButton;
@@ -28,6 +29,13 @@ public class LunarSettingsScreen extends WindowTabScreen {
             };
             return;
         }
+
+        WButton back = add(theme.button("Back to Meteor theme")).expandX().widget();
+        back.action = () -> {
+            GuiThemes.select("Meteor");
+            mc.setScreen(null);
+            Tabs.get().getFirst().openScreen(GuiThemes.get());
+        };
 
         add(theme.label("Accent color"));
         WHorizontalList presets = add(theme.horizontalList()).expandX().widget();
