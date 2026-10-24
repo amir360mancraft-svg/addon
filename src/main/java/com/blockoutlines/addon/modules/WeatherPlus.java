@@ -8,6 +8,7 @@ import meteordevelopment.meteorclient.renderer.Renderer3D;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.ColorSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
+import meteordevelopment.meteorclient.settings.EnumSetting;
 import meteordevelopment.meteorclient.settings.IntSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
@@ -107,8 +108,15 @@ public class WeatherPlus extends Module {
     // -------- storm
     private final Setting<Boolean> lightning = sgStorm.add(new BoolSetting.Builder()
         .name("lightning").description("Flashes and bolts far away. Needs a thunderstorm (or force-rain).").defaultValue(true).build());
+    public enum StormMode { AnyRain, Thunderstorm }
+    private final Setting<StormMode> stormMode = sgStorm.add(new EnumSetting.Builder<StormMode>()
+        .name("when").description("AnyRain = lightning in every rain. Thunderstorm = only in real thunderstorms (or with force-rain).")
+        .defaultValue(StormMode.AnyRain).visible(() -> lightning.get()).build());
+    private final Setting<Boolean> strikeNow = sgStorm.add(new BoolSetting.Builder()
+        .name("strike-now").description("Click to call one bolt right now (to test it). It switches itself off again.")
+        .defaultValue(false).visible(() -> lightning.get()).build());
     private final Setting<Integer> boltEvery = sgStorm.add(new IntSetting.Builder()
-        .name("bolt-every").description("Average seconds between bolts.").defaultValue(14).range(4, 60).sliderRange(5, 40)
+        .name("bolt-every").description("Average seconds between bolts.").defaultValue(9).range(3, 60).sliderRange(4, 40)
         .visible(lightning::get).build());
     private final Setting<Double> flashPower = sgStorm.add(new DoubleSetting.Builder()
         .name("flash-power").description("How bright the screen flashes (0 = no flash).").defaultValue(0.35).range(0.0, 0.8).sliderRange(0.0, 0.7)
@@ -149,7 +157,10 @@ public class WeatherPlus extends Module {
 
     // lightning
     private double nextBolt, boltBorn = -100, flashNow;
-    private double[] boltX, boltY, boltZ;
+    private final List<double[][]> boltLines = new ArrayList<>(); // each: {xs, ys, zs, {widthFactor}}
+    private double fwdAng;
+    private double impactX, impactY, impactZ;
+    private boolean haveBolt;
     private double boltDist;
     private double thunderAt = -1;
 
@@ -178,7 +189,8 @@ public class WeatherPlus extends Module {
         nearPuddles.clear();
         lights.clear();
         rainAmt = wet = 0;
-        boltX = null;
+        boltLines.clear();
+        haveBolt = false;
         flashNow = 0;
         thunderAt = -1;
     }
@@ -339,6 +351,7 @@ public class WeatherPlus extends Module {
         ux = -rz * fy;
         uy = rz * fx - rx * fz;
         uz = rx * fy;
+        fwdAng = Math.atan2(fz, fx);
         camX = event.offsetX;
         camY = event.offsetY;
         camZ = event.offsetZ;
@@ -506,22 +519,28 @@ public class WeatherPlus extends Module {
             double R = rp.maxR * e;
             int a = (int) (rp.a * (1 - k) * Math.min(1.0, wet * 1.4));
             if (a < 3) continue;
-            ring(r, rp.x, rp.y + lift, rp.z, R, Math.max(0.012, R * 0.14), a);
-            if (k > 0.2) ring(r, rp.x, rp.y + lift, rp.z, R * 0.6, Math.max(0.01, R * 0.09), a / 2);
+            a = (int) (a * 0.55);
+            ring(r, rp.x, rp.y + lift, rp.z, R, Math.max(0.02, R * 0.24), a);
+            if (k > 0.25) ring(r, rp.x, rp.y + lift, rp.z, R * 0.6, Math.max(0.015, R * 0.16), a / 2);
         }
     }
 
+    /** A soft ring: transparent on both edges, brightest in the middle of its width. */
     private void ring(Renderer3D r, double x, double y, double z, double R, double w, int a) {
-        int n = 14;
-        Color in = new Color(235, 245, 255, a), out = new Color(235, 245, 255, a / 3);
+        int n = R > 0.25 ? 32 : 22;
+        double r0 = Math.max(0.0, R - w * 0.5), r1 = R, r2 = R + w * 0.5;
+        Color none = new Color(225, 238, 255, 0), peak = new Color(235, 245, 255, a);
         for (int i = 0; i < n; i++) {
             double a0 = Math.PI * 2 * i / n, a1 = Math.PI * 2 * (i + 1) / n;
+            double c0 = Math.cos(a0), s0 = Math.sin(a0), c1 = Math.cos(a1), s1 = Math.sin(a1);
             quad(r,
-                x + Math.cos(a0) * R, y, z + Math.sin(a0) * R,
-                x + Math.cos(a1) * R, y, z + Math.sin(a1) * R,
-                x + Math.cos(a1) * (R + w), y, z + Math.sin(a1) * (R + w),
-                x + Math.cos(a0) * (R + w), y, z + Math.sin(a0) * (R + w),
-                in, in, out, out);
+                x + c0 * r0, y, z + s0 * r0, x + c1 * r0, y, z + s1 * r0,
+                x + c1 * r1, y, z + s1 * r1, x + c0 * r1, y, z + s0 * r1,
+                none, none, peak, peak);
+            quad(r,
+                x + c0 * r1, y, z + s0 * r1, x + c1 * r1, y, z + s1 * r1,
+                x + c1 * r2, y, z + s1 * r2, x + c0 * r2, y, z + s0 * r2,
+                peak, peak, none, none);
         }
     }
 
@@ -563,13 +582,13 @@ public class WeatherPlus extends Module {
 
             // water body: sky mirror in the middle, soft edge
             double cr = lerp(wc.r, skyR, fres * 0.8), cg = lerp(wc.g, skyG, fres * 0.8), cb = lerp(wc.b, skyB, fres * 0.8);
-            int aMid = (int) (wc.a * vis * (0.6 + 0.4 * fres));
+            int aMid = (int) (wc.a * 0.8 * vis * (0.6 + 0.4 * fres));
             for (int i = 0; i < N; i++) {
                 int j = (i + 1) % N;
                 double a0 = Math.PI * 2 * i / N, a1 = Math.PI * 2 * j / N;
                 double r0 = p.rad[i], r1 = p.rad[j];
-                double ix0 = p.x + Math.cos(a0) * r0 * 0.7, iz0 = p.z + Math.sin(a0) * r0 * 0.7;
-                double ix1 = p.x + Math.cos(a1) * r1 * 0.7, iz1 = p.z + Math.sin(a1) * r1 * 0.7;
+                double ix0 = p.x + Math.cos(a0) * r0 * 0.5, iz0 = p.z + Math.sin(a0) * r0 * 0.5;
+                double ix1 = p.x + Math.cos(a1) * r1 * 0.5, iz1 = p.z + Math.sin(a1) * r1 * 0.5;
                 double ox0 = p.x + Math.cos(a0) * r0, oz0 = p.z + Math.sin(a0) * r0;
                 double ox1 = p.x + Math.cos(a1) * r1, oz1 = p.z + Math.sin(a1) * r1;
                 // clouds drifting over the mirror
@@ -613,7 +632,10 @@ public class WeatherPlus extends Module {
         return out;
     }
 
-    /** The mirror image of a light: a long soft streak lying in the water, pointing at you. */
+    /**
+     * The mirror image of a light: a soft glow in the water below it. Seen from the side it stretches into a long
+     * shimmering streak that points at you, seen from above it is a short round glow.
+     */
     private void reflectLight(Renderer3D r, Puddle p, Light l, double mirror, double secs, double lift) {
         if (l.y < p.y + 0.15) return;
         double dxz = Math.hypot(l.x - p.x, l.z - p.z);
@@ -624,44 +646,57 @@ public class WeatherPlus extends Module {
         if (Math.hypot(o[0] - p.x, o[1] - p.z) > radiusAt(p, radAng) * 0.92) return;
 
         double fall = clamp(1.0 - dxz / (p.maxR + 9));
-        double a = 215 * mirror * (0.35 + 0.65 * fall) * (0.88 + 0.12 * Math.sin(secs * 7 + l.x * 3 + l.z));
+        double a = 170 * mirror * (0.35 + 0.65 * fall) * (0.9 + 0.1 * Math.sin(secs * 6 + l.x * 3 + l.z));
         if (a < 6) return;
 
-        // the streak runs along the view direction on the water
         double dx = o[0] - camX, dz = o[1] - camZ;
         double dl = Math.max(1e-6, Math.hypot(dx, dz));
         dx /= dl; dz /= dl;
-        double half = 0.5 + 0.12 * (l.y - p.y);
-        for (int k = 0; k < 4; k++) {
-            double ax = o[0] + dx * half, az = o[1] + dz * half, bx = o[0] - dx * half, bz = o[1] - dz * half;
-            if (inside(p, ax, az) && inside(p, bx, bz)) break;
-            half *= 0.6;
+        double elev = Math.atan2(camY - p.y, Math.max(0.3, dl));
+        double elong = Math.max(1.0, Math.min(4.0, 1.0 / Math.max(0.25, Math.sin(elev))));
+        double h = l.y - p.y;
+        double len = (0.30 + 0.07 * h) * elong, wid = 0.14 + 0.02 * h;
+        for (int k = 0; k < 5; k++) {
+            if (inside(p, o[0] + dx * len, o[1] + dz * len) && inside(p, o[0] - dx * len, o[1] - dz * len)) break;
+            len *= 0.7;
+            wid *= 0.85;
         }
-        double w = 0.07 + 0.012 * (l.y - p.y);
         double y = p.y + lift;
-        Color core = new Color(l.r, l.g, l.b, (int) Math.min(255, a));
-        Color mid = new Color(l.r, l.g, l.b, (int) (a * 0.45));
-        Color none = new Color(l.r, l.g, l.b, 0);
-        double px = -dz, pz = dx; // sideways
-        // two halves of the streak, widest and brightest in the middle
-        quad(r,
-            o[0] + px * w, y, o[1] + pz * w, o[0] - px * w, y, o[1] - pz * w,
-            o[0] - px * w * 0.3 + dx * half, y, o[1] - pz * w * 0.3 + dz * half, o[0] + px * w * 0.3 + dx * half, y, o[1] + pz * w * 0.3 + dz * half,
-            core, core, none, none);
-        quad(r,
-            o[0] + px * w, y, o[1] + pz * w, o[0] - px * w, y, o[1] - pz * w,
-            o[0] - px * w * 0.3 - dx * half, y, o[1] - pz * w * 0.3 - dz * half, o[0] + px * w * 0.3 - dx * half, y, o[1] + pz * w * 0.3 - dz * half,
-            core, core, none, none);
-        // a wider faint glow around it
-        double w2 = w * 3.2;
-        quad(r,
-            o[0] + px * w2, y, o[1] + pz * w2, o[0] - px * w2, y, o[1] - pz * w2,
-            o[0] - px * w2 * 0.2 + dx * half * 0.8, y, o[1] - pz * w2 * 0.2 + dz * half * 0.8, o[0] + px * w2 * 0.2 + dx * half * 0.8, y, o[1] + pz * w2 * 0.2 + dz * half * 0.8,
-            mid, mid, none, none);
-        quad(r,
-            o[0] + px * w2, y, o[1] + pz * w2, o[0] - px * w2, y, o[1] - pz * w2,
-            o[0] - px * w2 * 0.2 - dx * half * 0.8, y, o[1] - pz * w2 * 0.2 - dz * half * 0.8, o[0] + px * w2 * 0.2 - dx * half * 0.8, y, o[1] + pz * w2 * 0.2 - dz * half * 0.8,
-            mid, mid, none, none);
+        softGlow(r, o[0], y, o[1], dx, dz, len * 2.2, wid * 2.6, l.r, l.g, l.b, (int) (a * 0.35), secs, 0.0);
+        softGlow(r, o[0], y + 0.002, o[1], dx, dz, len, wid, l.r, l.g, l.b, (int) a, secs, 1.0);
+        softGlow(r, o[0], y + 0.004, o[1], dx, dz, len * 0.4, wid * 0.45, 255, 245, 225, (int) Math.min(255, a * 1.1), secs, 2.0);
+    }
+
+    /** A soft elliptical glow lying on the water: bright in the middle, fading to nothing at the edge, with a slow shimmer. */
+    private void softGlow(Renderer3D r, double x, double y, double z, double ax, double az, double len, double wid,
+                          int cr, int cg, int cb, int a, double secs, double phase) {
+        int segs = 22;
+        double[] fr = {0.0, 0.4, 0.75, 1.0};
+        double[] al = {1.0, 0.55, 0.16, 0.0};
+        double px = -az, pz = ax;
+        for (int ring = 0; ring < 3; ring++) {
+            for (int i = 0; i < segs; i++) {
+                double t0 = Math.PI * 2 * i / segs, t1 = Math.PI * 2 * (i + 1) / segs;
+                double s0 = 0.88 + 0.12 * Math.sin(secs * 3.2 + t0 * 3 + phase * 2.1);
+                double s1 = 0.88 + 0.12 * Math.sin(secs * 3.2 + t1 * 3 + phase * 2.1);
+                double f0 = fr[ring], f1 = fr[ring + 1];
+                double[] u = new double[4], v = new double[4];
+                u[0] = Math.cos(t0) * len * f0; v[0] = Math.sin(t0) * wid * f0;
+                u[1] = Math.cos(t1) * len * f0; v[1] = Math.sin(t1) * wid * f0;
+                u[2] = Math.cos(t1) * len * f1; v[2] = Math.sin(t1) * wid * f1;
+                u[3] = Math.cos(t0) * len * f1; v[3] = Math.sin(t0) * wid * f1;
+                Color c0 = new Color(cr, cg, cb, (int) (a * al[ring] * s0));
+                Color c1 = new Color(cr, cg, cb, (int) (a * al[ring] * s1));
+                Color c2 = new Color(cr, cg, cb, (int) (a * al[ring + 1] * s1));
+                Color c3 = new Color(cr, cg, cb, (int) (a * al[ring + 1] * s0));
+                quad(r,
+                    x + ax * u[0] + px * v[0], y, z + az * u[0] + pz * v[0],
+                    x + ax * u[1] + px * v[1], y, z + az * u[1] + pz * v[1],
+                    x + ax * u[2] + px * v[2], y, z + az * u[2] + pz * v[2],
+                    x + ax * u[3] + px * v[3], y, z + az * u[3] + pz * v[3],
+                    c0, c1, c2, c3);
+            }
+        }
     }
 
     /** You and the mobs, upside down: every corner of the body is projected onto the water along your line of sight. */
@@ -673,21 +708,24 @@ public class WeatherPlus extends Module {
         double yawRad = Math.toRadians(e instanceof LivingEntity le ? le.getBodyYaw() : e.getYaw());
         double y0 = Math.max(at.y, p.y);
 
+        double mv = Math.min(1.0, e.getVelocity().horizontalLength() * 7.0);
+        double sw = Math.sin(System.currentTimeMillis() / 1000.0 * 9.0) * 0.32 * mv;
+        double sneak = e.isSneaking() ? 0.2 : 0.0;
         if (e instanceof PlayerEntity) {
-            // a player built from boxes: legs, body, arms, head
-            Color skin = new Color(205, 160, 125, 255), shirt = new Color(70, 105, 165, 255), pants = new Color(55, 60, 120, 255);
+            // a player built from boxes: legs and arms swing while it walks, tinted like the sky so it reads as a reflection
+            Color skin = new Color(190, 150, 125, 255), shirt = new Color(80, 105, 150, 255), pants = new Color(60, 66, 110, 255);
             double off = y0 - at.y;
-            reflectBox(r, p, at.x, at.z, y0, 0.25, 0.75 - off, 0.13, yawRad, 0.125, pants, mirror, lift);
-            reflectBox(r, p, at.x, at.z, y0, 0.25, 0.75 - off, 0.13, yawRad, -0.125, pants, mirror, lift);
-            reflectBox(r, p, at.x, at.z, at.y + 0.75, 0.5, 0.75, 0.13, yawRad, 0.0, shirt, mirror, lift);
-            reflectBox(r, p, at.x, at.z, at.y + 0.75, 0.14, 0.7, 0.13, yawRad, 0.37, shirt, mirror, lift);
-            reflectBox(r, p, at.x, at.z, at.y + 0.75, 0.14, 0.7, 0.13, yawRad, -0.37, shirt, mirror, lift);
-            if (!first) reflectBox(r, p, at.x, at.z, at.y + 1.5, 0.5, 0.5, 0.25, yawRad, 0.0, skin, mirror, lift);
+            reflectBox(r, p, at.x, at.z, y0, 0.25, 0.75 - off, 0.13, yawRad, 0.125, sw, pants, mirror, lift);
+            reflectBox(r, p, at.x, at.z, y0, 0.25, 0.75 - off, 0.13, yawRad, -0.125, -sw, pants, mirror, lift);
+            reflectBox(r, p, at.x, at.z, at.y + 0.75, 0.5, 0.75 - sneak, 0.13, yawRad, 0.0, 0.0, shirt, mirror, lift);
+            reflectBox(r, p, at.x, at.z, at.y + 0.75, 0.14, 0.7 - sneak, 0.13, yawRad, 0.37, -sw, shirt, mirror, lift);
+            reflectBox(r, p, at.x, at.z, at.y + 0.75, 0.14, 0.7 - sneak, 0.13, yawRad, -0.37, sw, shirt, mirror, lift);
+            if (!first) reflectBox(r, p, at.x, at.z, at.y + 1.5 - sneak, 0.5, 0.5, 0.25, yawRad, 0.0, 0.0, skin, mirror, lift);
         } else {
             LivingEntity le = (LivingEntity) e;
             Color tint = e instanceof Monster ? new Color(75, 105, 70, 255) : new Color(105, 90, 80, 255);
             double hw = le.getWidth() * 0.5;
-            reflectBox(r, p, at.x, at.z, y0, hw * 2, le.getHeight() - (y0 - at.y), hw, yawRad, 0.0, tint, mirror, lift);
+            reflectBox(r, p, at.x, at.z, y0, hw * 2, le.getHeight() - (y0 - at.y), hw, yawRad, 0.0, 0.0, tint, mirror, lift);
         }
     }
 
@@ -696,12 +734,12 @@ public class WeatherPlus extends Module {
      * left-right direction). Corners are projected and kept inside the puddle.
      */
     private void reflectBox(Renderer3D r, Puddle p, double cx, double cz, double bottom, double widthX, double h, double halfZ,
-                            double yawRad, double sideOff, Color tint, double mirror, double lift) {
+                            double yawRad, double sideOff, double fwdOff, Color tint, double mirror, double lift) {
         if (h <= 0.02) return;
         double cs = Math.cos(yawRad), sn = Math.sin(yawRad);
         double hx = widthX * 0.5;
         // side direction in the world (the entity's left-right axis)
-        double bx = cx + sideOff * cs, bz = cz + sideOff * sn;
+        double bx = cx + sideOff * cs - fwdOff * sn, bz = cz + sideOff * sn + fwdOff * cs;
         double[] px = new double[8], pz = new double[8];
         double[] o = new double[2];
         double mx = 0, mz = 0;
@@ -722,9 +760,9 @@ public class WeatherPlus extends Module {
         for (int i = 0; i < 8; i++) clampInside(p, px, pz, i);
 
         double y = p.y + lift;
-        int a = (int) Math.min(200, 120 * mirror);
+        int a = (int) Math.min(110, 80 * mirror);
         Color foot = new Color(tint.r, tint.g, tint.b, a);
-        Color head = new Color(tint.r, tint.g, tint.b, (int) (a * 0.45));
+        Color head = new Color(tint.r, tint.g, tint.b, (int) (a * 0.12));
         // bottom face is nearest the feet, top face is the faded far end
         quad(r, px[0], y, pz[0], px[1], y, pz[1], px[2], y, pz[2], px[3], y, pz[3], foot, foot, foot, foot);
         quad(r, px[4], y, pz[4], px[5], y, pz[5], px[6], y, pz[6], px[7], y, pz[7], head, head, head, head);
@@ -785,8 +823,12 @@ public class WeatherPlus extends Module {
     // ------------------------------------------------------------------ lightning
 
     private void stormTick(Renderer3D r, double secs) {
-        boolean storm = rainAmt > 0.5 && (forceRain.get() || mc.world.isThundering());
-        if (storm && secs >= nextBolt) {
+        boolean storm = rainAmt > 0.3 && (forceRain.get() || stormMode.get() == StormMode.AnyRain || mc.world.isThundering());
+        if (strikeNow.get()) {
+            strikeNow.set(false);
+            strike(secs);
+            nextBolt = secs + boltEvery.get() * (0.5 + rng.nextDouble());
+        } else if (storm && secs >= nextBolt) {
             strike(secs);
             nextBolt = secs + boltEvery.get() * (0.4 + rng.nextDouble() * 1.2);
         }
@@ -798,68 +840,98 @@ public class WeatherPlus extends Module {
             }
         }
         double t = secs - boltBorn;
-        if (boltX != null && t < 0.4) {
-            double f = Math.max(Math.exp(-t * 9), 0.7 * Math.exp(-Math.pow((t - 0.2) * 14, 2)));
+        if (haveBolt && t < 0.45) {
+            double f = Math.max(Math.exp(-t * 8), 0.8 * Math.exp(-Math.pow((t - 0.18) * 16, 2)));
             int a = (int) (255 * Math.min(1.0, f));
             if (a > 4) drawBolt(r, a);
         }
     }
 
     private void strike(double secs) {
-        double ang = rng.nextDouble() * Math.PI * 2, dist = 35 + rng.nextDouble() * 55;
+        // mostly in front of you so you actually see it, sometimes to the side
+        double ang = rng.nextDouble() < 0.75 ? fwdAng + (rng.nextDouble() - 0.5) * 1.8 : rng.nextDouble() * Math.PI * 2;
+        double dist = 32 + rng.nextDouble() * 38;
         double bx = camX + Math.cos(ang) * dist, bz = camZ + Math.sin(ang) * dist;
         int ix = (int) Math.floor(bx), iz = (int) Math.floor(bz);
         double gy = camY - 3;
         if (mc.world.getChunkManager().isChunkLoaded(ix >> 4, iz >> 4)) gy = mc.world.getTopY(Heightmap.Type.MOTION_BLOCKING, ix, iz);
-        int seg = 16;
-        boltX = new double[seg + 1];
-        boltY = new double[seg + 1];
-        boltZ = new double[seg + 1];
-        double top = camY + 120;
-        for (int i = 0; i <= seg; i++) {
-            double k = i / (double) seg;
-            double j = (1 - k) * 7.0 + 0.5;
-            boltX[i] = bx + (i == seg ? 0 : (rng.nextDouble() - 0.5) * j * 2);
-            boltZ[i] = bz + (i == seg ? 0 : (rng.nextDouble() - 0.5) * j * 2);
-            boltY[i] = top + (gy - top) * k;
+        double top = Math.max(camY, gy) + 95 + rng.nextDouble() * 25;
+
+        boltLines.clear();
+        double[][] main = jaggedLine(bx + (rng.nextDouble() - 0.5) * 30, top, bz + (rng.nextDouble() - 0.5) * 30, bx, gy, bz, 20, 1.0, 5.5);
+        boltLines.add(main);
+        // branches
+        int branches = 3 + rng.nextInt(4);
+        for (int b = 0; b < branches; b++) {
+            int from = 3 + rng.nextInt(main[0].length - 6);
+            double sx = main[0][from], sy = main[1][from], sz = main[2][from];
+            double bang = rng.nextDouble() * Math.PI * 2, reach = 8 + rng.nextDouble() * 22;
+            double ey = sy - (10 + rng.nextDouble() * 28);
+            boltLines.add(jaggedLine(sx, sy, sz, sx + Math.cos(bang) * reach, Math.max(gy, ey), sz + Math.sin(bang) * reach, 7, 0.45, 2.8));
         }
+        impactX = bx; impactY = gy; impactZ = bz;
+        haveBolt = true;
         boltBorn = secs;
         boltDist = dist;
         thunderAt = secs + dist / 60.0;
     }
 
+    /** A zig-zag path from the start to the end; the sideways wobble gets smaller towards the end. Returns {xs, ys, zs, {width}}. */
+    private double[][] jaggedLine(double x0, double y0, double z0, double x1, double y1, double z1, int seg, double width, double jitter) {
+        double[] xs = new double[seg + 1], ys = new double[seg + 1], zs = new double[seg + 1];
+        for (int i = 0; i <= seg; i++) {
+            double k = i / (double) seg;
+            double j = (i == 0 || i == seg) ? 0 : jitter * (0.35 + 0.65 * (1 - k));
+            xs[i] = x0 + (x1 - x0) * k + (rng.nextDouble() - 0.5) * 2 * j;
+            ys[i] = y0 + (y1 - y0) * k;
+            zs[i] = z0 + (z1 - z0) * k + (rng.nextDouble() - 0.5) * 2 * j;
+        }
+        return new double[][] {xs, ys, zs, {width}};
+    }
+
     private void drawBolt(Renderer3D r, int a) {
-        double gx = boltX[boltX.length - 1] - camX, gz = boltZ[boltZ.length - 1] - camZ;
+        double gx = impactX - camX, gz = impactZ - camZ;
         double gl = Math.max(1e-6, Math.hypot(gx, gz));
         double sx = -gz / gl, sz = gx / gl; // sideways, facing the camera
-        double wGlow = Math.max(0.5, boltDist * 0.035), wCore = wGlow * 0.18;
-        Color glowC = new Color(170, 190, 255, a / 4), glowE = new Color(170, 190, 255, 0);
-        Color core = new Color(245, 248, 255, a);
-        for (int i = 0; i < boltX.length - 1; i++) {
-            quad(r,
-                boltX[i] - sx * wGlow, boltY[i], boltZ[i] - sz * wGlow,
-                boltX[i] + sx * wGlow, boltY[i], boltZ[i] + sz * wGlow,
-                boltX[i + 1] + sx * wGlow, boltY[i + 1], boltZ[i + 1] + sz * wGlow,
-                boltX[i + 1] - sx * wGlow, boltY[i + 1], boltZ[i + 1] - sz * wGlow,
-                glowE, glowE, glowE, glowE);
-            quad(r,
-                boltX[i] - sx * wGlow * 0.5, boltY[i], boltZ[i] - sz * wGlow * 0.5,
-                boltX[i] + sx * wGlow * 0.5, boltY[i], boltZ[i] + sz * wGlow * 0.5,
-                boltX[i + 1] + sx * wGlow * 0.5, boltY[i + 1], boltZ[i + 1] + sz * wGlow * 0.5,
-                boltX[i + 1] - sx * wGlow * 0.5, boltY[i + 1], boltZ[i + 1] - sz * wGlow * 0.5,
-                glowC, glowC, glowC, glowC);
-            quad(r,
-                boltX[i] - sx * wCore, boltY[i], boltZ[i] - sz * wCore,
-                boltX[i] + sx * wCore, boltY[i], boltZ[i] + sz * wCore,
-                boltX[i + 1] + sx * wCore, boltY[i + 1], boltZ[i + 1] + sz * wCore,
-                boltX[i + 1] - sx * wCore, boltY[i + 1], boltZ[i + 1] - sz * wCore,
-                core, core, core, core);
+        double base = Math.max(0.35, boltDist * 0.02);
+        Color glowE = new Color(150, 175, 255, 0);
+        Color glowC = new Color(170, 195, 255, a / 3);
+        Color core = new Color(250, 252, 255, a);
+        for (double[][] line : boltLines) {
+            double[] xs = line[0], ys = line[1], zs = line[2];
+            double wf = line[3][0];
+            double wGlow = base * 3.0 * wf, wMid = base * 1.2 * wf, wCore = base * 0.38 * wf;
+            for (int i = 0; i < xs.length - 1; i++) {
+                bolt(r, xs[i], ys[i], zs[i], xs[i + 1], ys[i + 1], zs[i + 1], sx, sz, wGlow, glowE, glowC);
+                bolt(r, xs[i], ys[i], zs[i], xs[i + 1], ys[i + 1], zs[i + 1], sx, sz, wMid, glowC, core);
+                bolt(r, xs[i], ys[i], zs[i], xs[i + 1], ys[i + 1], zs[i + 1], sx, sz, wCore, core, core);
+            }
         }
+        // glow where it hits the ground
+        double f = a / 255.0;
+        for (int k = 0; k < 3; k++) {
+            double R = 2.5 + k * 2.5;
+            Color in = new Color(200, 215, 255, (int) (a * 0.35 / (k + 1)));
+            Color out = new Color(200, 215, 255, 0);
+            for (int i = 0; i < 20; i++) {
+                double a0 = Math.PI * 2 * i / 20, a1 = Math.PI * 2 * (i + 1) / 20;
+                quad(r, impactX, impactY + 0.1, impactZ, impactX, impactY + 0.1, impactZ,
+                    impactX + Math.cos(a1) * R, impactY + 0.1, impactZ + Math.sin(a1) * R, impactX + Math.cos(a0) * R, impactY + 0.1, impactZ + Math.sin(a0) * R,
+                    in, in, out, out);
+            }
+        }
+    }
+
+    /** One segment of the bolt as a ribbon: {@code mid} color on the center line, {@code edge} color on both sides. */
+    private void bolt(Renderer3D r, double x0, double y0, double z0, double x1, double y1, double z1,
+                      double sx, double sz, double w, Color edge, Color mid) {
+        quad(r, x0 - sx * w, y0, z0 - sz * w, x0, y0, z0, x1, y1, z1, x1 - sx * w, y1, z1 - sz * w, edge, mid, mid, edge);
+        quad(r, x0, y0, z0, x0 + sx * w, y0, z0 + sz * w, x1 + sx * w, y1, z1 + sz * w, x1, y1, z1, mid, edge, edge, mid);
     }
 
     private double flashValue(double secs) {
         double t = secs - boltBorn;
-        if (t < 0 || t > 0.6) return 0;
+        if (t < 0 || t > 0.6 || !haveBolt) return 0;
         return Math.max(Math.exp(-t * 9), 0.7 * Math.exp(-Math.pow((t - 0.22) * 14, 2)));
     }
 
