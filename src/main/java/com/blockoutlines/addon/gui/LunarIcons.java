@@ -66,7 +66,7 @@ hud|q -0.95 -0.8 1.9 1.6 f|q -0.8 -0.65 1.6 1.3 b|c -0.45 -0.2 0.6 f|q -0.05 -0.
         {"kill-effect", "bolt"}, {"item-counter-hud", "box"}, {"item-drop-physics", "box"}, {"jump-circle", "ring"},
         {"menu-background", "picture"}, {"no-water", "nodrop"}, {"pets", "paw"}, {"player-signs", "sign"},
         {"player-trail", "trail"}, {"projectile-trails", "trail"}, {"saturation", "apple"}, {"swing-speed", "sword"},
-        {"target-hud", "hud"}, {"fireflies", "firefly"}, {"loot-beams", "beam"},
+        {"target-hud", "hud"}, {"fireflies", "firefly"}, {"loot-beams", "beam"}, {"afk-clicker", "sword"},
     };
 
     private record Cmd(char kind, double[] v, char color) {}

@@ -17,9 +17,15 @@ import net.minecraft.client.render.item.ItemRenderState;
 import net.minecraft.client.render.model.json.Transformation;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.ItemEntity;
+import net.minecraft.item.BlockItem;
+import net.minecraft.item.Item;
 import net.minecraft.registry.Registries;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Box;
 import net.minecraft.util.math.RotationAxis;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.util.shape.VoxelShape;
+import net.minecraft.world.EmptyBlockView;
 import org.joml.Vector3fc;
 
 import java.util.HashMap;
@@ -85,6 +91,10 @@ public class ItemDropPhysics extends Module {
         long last;
     }
 
+    /** How an item rests on the ground. Flat: lies down like a sprite. Cube: a full block, comes to rest on any face. Upright: a block that is not a full cube (fence, slab, stairs, chest ...) stays the way it would be placed. */
+    private enum Pose { FLAT, CUBE, UPRIGHT }
+
+    private final Map<Item, Pose> poses = new HashMap<>();
     private final Map<Integer, Phys> states = new HashMap<>();
     private int sweep;
 
@@ -123,16 +133,19 @@ public class ItemDropPhysics extends Module {
         if ((++sweep & 255) == 0) sweepOld(now);
 
         ItemRenderState irs = event.renderState.itemRenderState;
-        boolean block = irs.isSideLit(); // solid 3D models are lit from the side, flat sprites are not
+        Pose pose = poseOf(item.getStack().getItem(), irs.isSideLit()); // solid 3D models are lit from the side, flat sprites are not
+        boolean block = pose != Pose.FLAT;
 
         // size of the "ground" display transform of the model (blocks 0.25, sprites 0.5)
         float sx = 1f, sy = 1f, sz = 1f;
+        float ty = block ? 0.1875f : 0f; // height of the model's middle above the item's feet
         try {
             ItemRenderStateAccessor acc = (ItemRenderStateAccessor) irs;
             if (acc.meteor$getLayerCount() > 0) {
                 Transformation t = ((LayerRenderStateAccessor) acc.meteor$getLayers()[0]).meteor$getTransform();
                 Vector3fc s = t.scale();
                 sx = s.x(); sy = s.y(); sz = s.z();
+                ty = t.translation().y();
             }
         } catch (Throwable ignored) {
             sx = sy = sz = block ? 0.25f : 0.5f;
@@ -162,11 +175,12 @@ public class ItemDropPhysics extends Module {
                 if (wobble.get()) p.wobbleAmp = (float) Math.min(28.0, 6.0 + impact * 40.0);
             }
             float k = 1f - (float) Math.exp(-settleSpeed.get() * dt);
-            if (block && !sitOnFace.get()) {
+            if (pose == Pose.CUBE && !sitOnFace.get()) {
                 // keep whatever angle it stopped at
             } else {
-                // sprites lie flat (a multiple of 360), blocks come to rest on the nearest face (a multiple of 90)
-                float period = block ? 90f : 360f;
+                // sprites and blocks that are not full cubes end up the right way up (a multiple of 360),
+                // full blocks come to rest on the nearest face (a multiple of 90)
+                float period = pose == Pose.CUBE ? 90f : 360f;
                 p.pitch += (nearest(p.pitch, period) - p.pitch) * k;
             }
             p.rest = Math.min(1f, p.rest + dt * 8f);
@@ -208,19 +222,29 @@ public class ItemDropPhysics extends Module {
         m.translate(0.0, lift, 0.0);
         if (scale != 1f) m.scale(scale, scale, scale);
 
-        // lay the model down, then turn it to its resting direction
-        m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(90f));
-        m.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(yaw));
+        if (pose == Pose.UPRIGHT) {
+            // a fence, slab, stair, chest ...: stays the way it would be placed. Its bottom sits on the floor,
+            // it turns around the vertical axis to its resting direction and tumbles over a sideways axis in the air.
+            m.translate(0.0, -(ty - 0.5f * sy) + 0.004f, 0.0);
+            m.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(yaw));
+            m.translate(0.0, ty, 0.0);
+            m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(p.pitch + wob));
+            m.translate(0.0, -ty, 0.0);
+        } else {
+            // lay the model down, then turn it to its resting direction
+            m.multiply(RotationAxis.POSITIVE_X.rotationDegrees(90f));
+            m.multiply(RotationAxis.POSITIVE_Z.rotationDegrees(yaw));
 
-        // small moves so the model rests ON the ground
-        if (block) m.translate(0.0, -0.2, -0.08);
-        else if (extraOffset) m.translate(0.0, 0.0, -0.14 - unique * UNIQUE_OFFSET_SCALE);
-        else m.translate(0.0, 0.0, -0.04 - unique * UNIQUE_OFFSET_SCALE);
+            // small moves so the model rests ON the ground
+            if (block) m.translate(0.0, -0.2, -0.08);
+            else if (extraOffset) m.translate(0.0, 0.0, -0.14 - unique * UNIQUE_OFFSET_SCALE);
+            else m.translate(0.0, 0.0, -0.04 - unique * UNIQUE_OFFSET_SCALE);
 
-        // tumble / rest angle (turn over the item's side axis; blocks turn around their own middle)
-        if (block) m.translate(0.0, sy, 0.0);
-        m.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(p.pitch + wob));
-        if (block) m.translate(0.0, -sy, 0.0);
+            // tumble / rest angle (turn over the item's side axis; blocks turn around their own middle)
+            if (block) m.translate(0.0, sy, 0.0);
+            m.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(p.pitch + wob));
+            if (block) m.translate(0.0, -sy, 0.0);
+        }
 
         boolean layered = spreadStacks.get();
         if (!block && layered) m.translate(0.0, 0.0, -0.09375 * (count - 1) * 0.5);
@@ -228,7 +252,8 @@ public class ItemDropPhysics extends Module {
         for (int i = 0; i < count; i++) {
             m.push();
             if (i > 0 && block && layered) {
-                m.translate((layout.nextFloat() * 2f - 1f) * sx, (layout.nextFloat() * 2f - 1f) * sy, (layout.nextFloat() * 2f - 1f) * sz);
+                float ox = (layout.nextFloat() * 2f - 1f) * sx, oy = (layout.nextFloat() * 2f - 1f) * sy, oz = (layout.nextFloat() * 2f - 1f) * sz;
+                m.translate(ox, pose == Pose.UPRIGHT ? 0f : oy, oz); // upright blocks only spread sideways, they never float
             }
             irs.render(m, event.renderCommandQueue, event.light, OverlayTexture.DEFAULT_UV, event.renderState.outlineColor);
             m.pop();
@@ -238,6 +263,34 @@ public class ItemDropPhysics extends Module {
     }
 
     // ------------------------------------------------------------------ helpers
+
+    /**
+     * Decides how an item rests. Only solid 3D block items are "blocks"; of those only full cubes may lie on any face.
+     * A fence, slab, stair or chest turned onto its side would stand on its edge or hover above the floor, so those stay upright.
+     */
+    private Pose poseOf(Item it, boolean sideLit) {
+        if (!sideLit || !(it instanceof BlockItem blockItem)) return Pose.FLAT;
+        Pose known = poses.get(it);
+        if (known != null) return known;
+
+        Pose result;
+        try {
+            VoxelShape shape = blockItem.getBlock().getDefaultState().getOutlineShape(EmptyBlockView.INSTANCE, BlockPos.ORIGIN);
+            if (shape.isEmpty()) {
+                result = Pose.UPRIGHT;
+            } else {
+                Box bb = shape.getBoundingBox();
+                double volume = 0;
+                for (Box b : shape.getBoundingBoxes()) volume += b.getLengthX() * b.getLengthY() * b.getLengthZ();
+                boolean full = bb.getLengthX() > 0.97 && bb.getLengthY() > 0.97 && bb.getLengthZ() > 0.97 && volume > 0.97;
+                result = full ? Pose.CUBE : Pose.UPRIGHT;
+            }
+        } catch (Throwable t) {
+            result = Pose.CUBE;
+        }
+        poses.put(it, result);
+        return result;
+    }
 
     /** How many copies of the item are drawn for a stack of this size. */
     private static int modelCount(int amount) {
