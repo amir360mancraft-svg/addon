@@ -1,6 +1,7 @@
 package com.blockoutlines.addon.modules;
 
 import com.blockoutlines.addon.BlockOutlinesAddon;
+import com.blockoutlines.addon.mixin.GameRendererInvoker;
 import meteordevelopment.meteorclient.events.render.Render2DEvent;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
@@ -13,6 +14,7 @@ import meteordevelopment.meteorclient.settings.IntSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.modules.Module;
+import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
@@ -25,6 +27,7 @@ import net.minecraft.entity.mob.Monster;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.registry.Registries;
 import net.minecraft.sound.SoundEvents;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
@@ -51,6 +54,7 @@ public class WeatherPlus extends Module {
     private final SettingGroup sgSplash = settings.createGroup("Splashes");
     private final SettingGroup sgPuddle = settings.createGroup("Puddles & mirror");
     private final SettingGroup sgStorm = settings.createGroup("Storm");
+    private final SettingGroup sgShader = settings.createGroup("Shader");
 
     // -------- rain
     private final Setting<Boolean> forceRain = sgGeneral.add(new BoolSetting.Builder()
@@ -108,6 +112,15 @@ public class WeatherPlus extends Module {
     // -------- storm
     private final Setting<Boolean> lightning = sgStorm.add(new BoolSetting.Builder()
         .name("lightning").description("Flashes and bolts far away. Needs a thunderstorm (or force-rain).").defaultValue(true).build());
+    private final Setting<Boolean> wetShader = sgShader.add(new BoolSetting.Builder()
+        .name("wet-shader").description("A real shader: the ground turns wet and shiny and mirrors lights, mobs, you, buildings and the sky. Also a glow around lights and a little rain haze. Not used while Color Grading or Saturation is on.")
+        .defaultValue(true).build());
+    private final Setting<Double> shaderPower = sgShader.add(new DoubleSetting.Builder()
+        .name("strength").description("How strong the wet look is (light below about 0.7, full above).").defaultValue(1.0).range(0.3, 1.0).sliderRange(0.3, 1.0)
+        .visible(wetShader::get).build());
+    private final Setting<Boolean> shaderAlways = sgShader.add(new BoolSetting.Builder()
+        .name("also-when-dry").description("Keep the wet look on even when it is not raining.").defaultValue(false).visible(wetShader::get).build());
+
     public enum StormMode { AnyRain, Thunderstorm }
     private final Setting<StormMode> stormMode = sgStorm.add(new EnumSetting.Builder<StormMode>()
         .name("when").description("AnyRain = lightning in every rain. Thunderstorm = only in real thunderstorms (or with force-rain).")
@@ -148,6 +161,8 @@ public class WeatherPlus extends Module {
     private final Random rng = new Random();
     private final BlockPos.Mutable pos = new BlockPos.Mutable();
 
+    private boolean shaderOn, shaderActive;
+    private int shaderKey = -1;
     private double rainAmt, wet;
     private Object lastWorld;
     private int tickN;
@@ -177,7 +192,36 @@ public class WeatherPlus extends Module {
 
     @Override
     public void onDeactivate() {
+        clearShader();
         clearAll();
+    }
+
+    private void clearShader() {
+        if (shaderOn && mc.gameRenderer != null) ((GameRendererInvoker) mc.gameRenderer).blockoutlines$clearPostProcessor();
+        shaderOn = false;
+        shaderActive = false;
+        shaderKey = -1;
+    }
+
+    /** Switches the wet-world post effect on and off and picks the step that matches your view (pitch, fov, strength). */
+    private void updateShader() {
+        boolean conflict = Modules.get().isActive(ColorGrading.class) || Modules.get().isActive(Saturation.class);
+        double level = shaderAlways.get() ? 1.0 : Math.max(rainAmt, wet * 0.8);
+        if (!wetShader.get() || conflict || level < 0.12 || mc.gameRenderer == null) {
+            if (shaderOn) clearShader();
+            return;
+        }
+        int st = level < 0.5 ? 0 : 1;
+        if (shaderPower.get() < 0.7) st = 0;
+        int pi = Math.max(0, Math.min(9, (int) Math.round(Math.max(0f, mc.player.getPitch()) / 10.0)));
+        int fov = mc.options.getFov().getValue();
+        int[] fovs = {70, 90, 110};
+        int fi = 0;
+        for (int i = 1; i < fovs.length; i++) if (Math.abs(fovs[i] - fov) < Math.abs(fovs[fi] - fov)) fi = i;
+        // vanilla drops the post effect when the camera entity changes, so it is set again every tick (cheap, same as Color Grading)
+        ((GameRendererInvoker) mc.gameRenderer).blockoutlines$setPostProcessor(Identifier.of("blockoutlines", String.format("wet_%02d_%d_%d", pi, fi, st)));
+        shaderOn = true;
+        shaderActive = true;
     }
 
     private void clearAll() {
@@ -205,6 +249,7 @@ public class WeatherPlus extends Module {
             clearAll();
         }
         tickN++;
+        updateShader();
         if (!puddles.get() || (wet < 0.02 && rainAmt < 0.02)) {
             if (!puddleMap.isEmpty()) { puddleMap.clear(); noPuddle.clear(); nearPuddles.clear(); }
             lights.clear();
@@ -579,6 +624,8 @@ public class WeatherPlus extends Module {
                     if (droplets.get() && dropletList.size() < 700 && rng.nextDouble() < 0.5) splash(sx, p.y, sz, 2);
                 }
             }
+
+            if (shaderActive) continue; // the shader draws the real mirror
 
             // water body: sky mirror in the middle, soft edge
             double cr = lerp(wc.r, skyR, fres * 0.8), cg = lerp(wc.g, skyG, fres * 0.8), cb = lerp(wc.b, skyB, fres * 0.8);
