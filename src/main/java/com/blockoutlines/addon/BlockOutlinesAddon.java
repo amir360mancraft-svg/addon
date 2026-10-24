@@ -17,6 +17,8 @@ import com.blockoutlines.addon.modules.FakeElytra;
 import com.blockoutlines.addon.modules.Fireflies;
 import com.blockoutlines.addon.modules.LightChunkFinder;
 import com.blockoutlines.addon.modules.AfkClicker;
+import com.blockoutlines.addon.modules.SwordTrails;
+import com.blockoutlines.addon.modules.WeatherPlus;
 import com.blockoutlines.addon.modules.LootBeams;
 import com.blockoutlines.addon.modules.NetheriteFinder;
 import com.blockoutlines.addon.modules.OgChunkFinder;
@@ -116,6 +118,8 @@ public class BlockOutlinesAddon extends MeteorAddon {
         Modules.get().add(new Fireflies());
         Modules.get().add(new LootBeams());
         Modules.get().add(new AfkClicker());
+        Modules.get().add(new WeatherPlus());
+        Modules.get().add(new SwordTrails());
         LOG.info("Better Render loaded");
     }
 
