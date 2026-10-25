@@ -9,8 +9,8 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.util.Identifier;
 
 /**
- * One shared full-screen shader (bloom + screen shock wave + hand look) for several modules. The game can run only
- * one post effect at a time, so modules only say what they want here and {@link #apply()} picks the matching effect.
+ * One shared full-screen shader (bloom + screen shock wave) for several modules. The game can run only one post
+ * effect at a time, so modules only say what they want here and {@link #apply()} picks the matching effect.
  * It steps aside while Color Grading, Saturation or the Weather Plus wet shader is using the screen.
  */
 public final class PostFx {
@@ -20,9 +20,10 @@ public final class PostFx {
     public static int shockFrame;
     /** 0 = far / light, 1 = close / strong. */
     public static int shockStrong;
-    /** 0 = off, 1..24 = animation frame of the hand shader. Set by Shader Hand. */
+
+    /** 0 = off, 1..16 = animation frame of the hand shader. Set by Shader Hand (it wins over bloom / shock). */
     public static int handFrame;
-    /** 0 = gradient, 1 = hologram. Set by Shader Hand. */
+    /** 0 = gradient, 1 = hologram. */
     public static int handMode;
 
     private static boolean mine;
@@ -46,14 +47,10 @@ public final class PostFx {
             }
             return;
         }
-        String id;
-        if (handFrame > 0) {
-            // frame 1..24 -> file hand_<mode>_00 .. hand_<mode>_23
-            id = String.format("hand_%d_%02d", Math.max(0, Math.min(1, handMode)), Math.max(0, Math.min(23, handFrame - 1)));
-        } else {
-            int f = Math.max(0, Math.min(9, shockFrame));
-            id = String.format("fx_%d_%d_%d", Math.max(0, Math.min(2, bloom)), f, f == 0 ? 0 : Math.max(0, Math.min(1, shockStrong)));
-        }
+        int f = Math.max(0, Math.min(9, shockFrame));
+        String id = handFrame > 0
+            ? String.format("hand_%d_%02d", Math.max(0, Math.min(5, handMode)), Math.max(0, Math.min(15, handFrame - 1)))
+            : String.format("fx_%d_%d_%d", Math.max(0, Math.min(2, bloom)), f, f == 0 ? 0 : Math.max(0, Math.min(1, shockStrong)));
         // set again every tick: vanilla drops the post effect when the camera entity changes
         ((GameRendererInvoker) mc.gameRenderer).blockoutlines$setPostProcessor(Identifier.of("blockoutlines", id));
         mine = true;

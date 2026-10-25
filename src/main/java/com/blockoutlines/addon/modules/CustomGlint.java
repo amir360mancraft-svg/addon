@@ -49,6 +49,23 @@ public class CustomGlint extends Module {
     private final Setting<Where> where = sg.add(new EnumSetting.Builder<Where>()
         .name("where").description("HandOnly: only the item in your hand (first person). Everywhere: also inventory, hotbar, armor.")
         .defaultValue(Where.HandOnly).build());
+    public enum Style { Lightning, Plasma, Galaxy, Flames, Frost, Waves, Matrix }
+
+    private final Setting<Style> style = sg.add(new EnumSetting.Builder<Style>()
+        .name("style").description("Lightning = bolts and rays. The others are full animated patterns: Plasma, Galaxy (stars), Flames, Frost, Waves, Matrix (falling lines).")
+        .defaultValue(Style.Lightning).build());
+    private final Setting<Boolean> styleOwnColors = sg.add(new BoolSetting.Builder()
+        .name("style-own-colors").description("Use the colors of the chosen style. Turn off to paint the style with your glow color (or rainbow).")
+        .defaultValue(true).visible(() -> style.get() != Style.Lightning).build());
+    private final Setting<Integer> styleStrength = sg.add(new IntSetting.Builder()
+        .name("style-strength").description("How bright the pattern is.").defaultValue(70).range(0, 200).sliderRange(0, 150)
+        .visible(() -> style.get() != Style.Lightning).build());
+    private final Setting<Double> styleSpeed = sg.add(new DoubleSetting.Builder()
+        .name("style-speed").description("How fast the pattern moves.").defaultValue(1.0).range(0.1, 5.0).sliderRange(0.2, 3.0)
+        .visible(() -> style.get() != Style.Lightning).build());
+    private final Setting<Boolean> boltsOverStyle = sg.add(new BoolSetting.Builder()
+        .name("bolts-over-style").description("Also draw the lightning bolts and rays on top of the pattern.").defaultValue(false)
+        .visible(() -> style.get() != Style.Lightning).build());
     private final Setting<SettingColor> coreColor = sg.add(new ColorSetting.Builder()
         .name("core-color").description("Colour of the bright centre of bolts and rays.")
         .defaultValue(new SettingColor(255, 255, 255, 255)).build());
@@ -263,6 +280,7 @@ public class CustomGlint extends Module {
             b[i] *= decay;
         }
 
+        if (style.get() != Style.Lightning && !boltsOverStyle.get()) return;
         spawnCarryBolt += boltRate.get() * dt;
         while (spawnCarryBolt >= 1.0) {
             spawnCarryBolt -= 1.0;
@@ -357,6 +375,18 @@ public class CustomGlint extends Module {
                 } else {
                     rr = r[i] + base * gr; g2 = g[i] + base * gg; bb2 = b[i] + base * gb;
                 }
+                if (style.get() != Style.Lightning) {
+                    float[] sc = stylePixel(x, y, t * styleSpeed.get());
+                    float k = styleStrength.get() / 100.0f;
+                    if (styleOwnColors.get()) { rr += sc[0] * k; g2 += sc[1] * k; bb2 += sc[2] * k; }
+                    else {
+                        float l = (sc[0] * 0.3f + sc[1] * 0.59f + sc[2] * 0.11f) * k;
+                        if (rainbow.get()) {
+                            Color c2 = CosmeticUtil.hsv((t * 0.25 + x / (double) N * 0.5), 0.9f, 1f, 255);
+                            rr += l * c2.r / 255f; g2 += l * c2.g / 255f; bb2 += l * c2.b / 255f;
+                        } else { rr += l * gr; g2 += l * gg; bb2 += l * gb; }
+                    }
+                }
                 rr += baseR; g2 += baseG; bb2 += baseB;
                 int ri = clamp(rr * gain), gi = clamp(g2 * gain), bi = clamp(bb2 * gain);
                 int argb = 0xFF000000 | (ri << 16) | (gi << 8) | bi;
@@ -366,6 +396,64 @@ public class CustomGlint extends Module {
         }
         itemTex.upload();
         if (armorTex != null) armorTex.upload();
+    }
+
+    private static double fr(double v) { return v - Math.floor(v); }
+
+    private static double hash(int a, int b) {
+        int h = a * 374761393 + b * 668265263;
+        h = (h ^ (h >>> 13)) * 1274126177;
+        return ((h ^ (h >>> 16)) & 0xFFFF) / 65535.0;
+    }
+
+    /** One pixel of the chosen pattern, tileable (it wraps at the texture edges). Returns r, g, b in 0..1. */
+    private float[] stylePixel(int x, int y, double t) {
+        double u = x / (double) N * Math.PI * 2.0, v = y / (double) N * Math.PI * 2.0;
+        switch (style.get()) {
+            case Plasma: {
+                double a = Math.sin(u * 2 + t * 1.3) + Math.sin(v * 3 - t * 1.1) + Math.sin((u + v) * 2 + t * 0.8)
+                    + Math.sin(Math.sqrt(Math.pow(Math.sin(u) * 2, 2) + Math.pow(Math.sin(v) * 2, 2)) * 3 - t * 1.5);
+                double h = fr(a * 0.12 + 0.75 + t * 0.03);
+                Color c = CosmeticUtil.hsv(h, 0.85f, 1f, 255);
+                float k = (float) (0.35 + 0.35 * Math.sin(a * 1.2));
+                return new float[]{c.r / 255f * k, c.g / 255f * k, c.b / 255f * k};
+            }
+            case Galaxy: {
+                double n = 0.5 + 0.25 * Math.sin(u * 2 + t * 0.4) + 0.25 * Math.sin(v * 3 - t * 0.3 + Math.sin(u * 2));
+                float r0 = (float) (0.15 * n + 0.10), g0 = (float) (0.05 * n), b0 = (float) (0.35 * n + 0.10);
+                double star = hash(x / 2, y / 2);
+                if (star > 0.965) {
+                    float tw = (float) (0.5 + 0.5 * Math.sin(t * 4 + star * 200));
+                    r0 += tw; g0 += tw; b0 += tw;
+                }
+                return new float[]{r0, g0, b0};
+            }
+            case Flames: {
+                double up = fr(y / (double) N + t * 0.35);
+                double n = Math.sin(u * 3 + Math.sin(v * 2 + t * 2) * 1.5) * 0.5 + 0.5;
+                double heat = Math.max(0, Math.min(1, n * (1.0 - up) * 1.4 + 0.1 * Math.sin(v * 4 - t * 5)));
+                return new float[]{(float) Math.min(1, heat * 1.6), (float) (heat * heat * 0.9), (float) (heat * heat * heat * 0.3)};
+            }
+            case Frost: {
+                double n = 0.5 + 0.25 * Math.sin(u * 4 + t * 0.5) + 0.25 * Math.sin(v * 5 - t * 0.4 + u);
+                float k = (float) (n * 0.45);
+                float sp = (float) Math.pow(Math.max(0, Math.sin(u * 8 + t * 1.5) * Math.sin(v * 8 - t)), 10);
+                return new float[]{0.45f * k + sp, 0.8f * k + sp, 1.0f * k + sp};
+            }
+            case Waves: {
+                double w = 0.5 + 0.5 * Math.sin(u * 2 + Math.sin(v * 2 + t * 1.2) * 1.4 + t * 1.5);
+                float k = (float) Math.pow(w, 2.5);
+                return new float[]{0.1f * k, 0.55f * k, 1.0f * k};
+            }
+            default: { // Matrix
+                int col = x / 4;
+                double speed = 0.4 + hash(col, 7) * 0.9;
+                double head = fr(y / (double) N * 2.0 - t * speed * 0.5 - hash(col, 3));
+                float k = (float) Math.pow(1.0 - head, 3.0);
+                if (x % 4 == 3) k *= 0.25f;
+                return new float[]{0.1f * k, 1.0f * k, 0.3f * k};
+            }
+        }
     }
 
     private static int clamp(float v) {

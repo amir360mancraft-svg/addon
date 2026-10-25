@@ -50,26 +50,53 @@ void main() {
         }
     }
 
-    if (Params.y < 0.5) {
+    int look = int(Params.y + 0.5);
+    float edge = 0.0;
+    if (hand) {
+        for (int i = 0; i < 4; i++) {
+            float a = 6.2831853 * float(i) / 4.0;
+            if (!isHand(texCoord + vec2(cos(a), sin(a)) * px * 3.0)) edge = 1.0;
+        }
+    }
+    float t = phase * 6.2831853;
+    float n = sin(texCoord.x * 18.0 + t) * sin(texCoord.y * 14.0 - t * 2.0) * 0.5 + 0.5;
+
+    if (look == 0) {
         // moving rainbow, keeps the shading of the hand
         vec3 g = hsv(phase + texCoord.x * 0.6 - texCoord.y * 0.35, 0.75, 1.0);
         if (hand) col = mix(col, g * (0.35 + luma * 1.25), 0.82);
         else col += hsv(phase + texCoord.x * 0.6 - texCoord.y * 0.35, 0.8, 1.0) * near * 0.35;
-    } else {
+    } else if (look == 1) {
         // blue hologram: scan lines, a rim that glows, a little flicker
-        float scan = 0.72 + 0.28 * sin(texCoord.y * size.y * 0.45 + phase * 40.0);
-        float flick = 0.94 + 0.06 * sin(phase * 125.0);
+        float scan = 0.72 + 0.28 * sin(texCoord.y * size.y * 0.45 + t * 6.0);
+        float flick = 0.94 + 0.06 * sin(t * 20.0);
         vec3 tint = vec3(0.25, 0.85, 1.0);
-        if (hand) {
-            float edge = 0.0;
-            for (int i = 0; i < 4; i++) {
-                float a = 6.2831853 * float(i) / 4.0;
-                if (!isHand(texCoord + vec2(cos(a), sin(a)) * px * 3.0)) edge = 1.0;
-            }
-            col = tint * (0.2 + luma * 1.1) * scan * flick + vec3(0.5, 0.95, 1.0) * edge * 0.9;
-        } else {
-            col += tint * near * 0.45;
-        }
+        if (hand) col = tint * (0.2 + luma * 1.1) * scan * flick + vec3(0.5, 0.95, 1.0) * edge * 0.9;
+        else col += tint * near * 0.45;
+    } else if (look == 2) {
+        // fire: hot orange/yellow that flickers upward
+        float f = clamp(n * 0.6 + luma * 0.7 + 0.15 * sin(texCoord.y * 30.0 + t * 3.0), 0.0, 1.0);
+        vec3 fire = mix(vec3(0.7, 0.08, 0.0), mix(vec3(1.0, 0.5, 0.0), vec3(1.0, 0.95, 0.5), f), f);
+        if (hand) col = mix(col, fire * (0.6 + luma), 0.88) + vec3(1.0, 0.7, 0.2) * edge * 0.3;
+        else col += vec3(1.0, 0.4, 0.05) * near * (0.4 + 0.25 * n);
+    } else if (look == 3) {
+        // frost: pale ice blue with sparkles
+        float sp = pow(max(0.0, sin(texCoord.x * 90.0 + t) * sin(texCoord.y * 80.0 - t * 1.5)), 12.0);
+        vec3 ice = mix(vec3(0.55, 0.8, 1.0), vec3(0.95, 1.0, 1.0), luma);
+        if (hand) col = mix(col, ice * (0.5 + luma * 0.8), 0.85) + vec3(sp) * 0.9 + vec3(0.7, 0.95, 1.0) * edge * 0.5;
+        else col += vec3(0.5, 0.85, 1.0) * near * 0.35;
+    } else if (look == 4) {
+        // gold: shiny metal with a sweeping highlight
+        float sweep = pow(max(0.0, sin((texCoord.x + texCoord.y * 0.6) * 7.0 - t)), 8.0);
+        vec3 gold = mix(vec3(0.55, 0.35, 0.05), vec3(1.0, 0.82, 0.3), luma);
+        if (hand) col = mix(col, gold * (0.55 + luma * 0.9), 0.88) + vec3(1.0, 0.95, 0.7) * sweep * 0.55;
+        else col += vec3(1.0, 0.8, 0.3) * near * 0.25;
+    } else {
+        // neon outline: dark hand with a bright pulsing colored edge
+        float pulse = 0.65 + 0.35 * sin(t * 2.0);
+        vec3 neon = hsv(phase, 0.9, 1.0);
+        if (hand) col = col * 0.25 + neon * edge * 1.4 * pulse;
+        else col += neon * near * 0.7 * pulse;
     }
 
     fragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
