@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Writes the Shader Hand post effects: hand_<look 0-5>_<frame 00-15>.json (the frame is the animation phase).
+"""Writes the Shader Hand post effects: hand_<look 0-6>_<frame 00-15>.json (the frame is the animation phase).
 Run from the project root before building: python3 tools/gen_hand_effects.py"""
 import json, os
 
 out = "src/main/resources/assets/blockoutlines/post_effect"
 os.makedirs(out, exist_ok=True)
 
-for look in range(6):
+for look in range(7):
     for frame in range(16):
         effect = {
             "targets": {"swap": {}},

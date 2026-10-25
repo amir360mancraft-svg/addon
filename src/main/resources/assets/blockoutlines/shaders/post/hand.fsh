@@ -91,6 +91,20 @@ void main() {
         vec3 gold = mix(vec3(0.55, 0.35, 0.05), vec3(1.0, 0.82, 0.3), luma);
         if (hand) col = mix(col, gold * (0.55 + luma * 0.9), 0.88) + vec3(1.0, 0.95, 0.7) * sweep * 0.55;
         else col += vec3(1.0, 0.8, 0.3) * near * 0.25;
+    } else if (look == 6) {
+        // crystal glint: see-through blue glass, faceted shading, glowing rim and swirling white glint lines
+        vec2 q = texCoord * vec2(size.x / size.y, 1.0);
+        float facet = floor(luma * 5.0) / 5.0;
+        float w1 = sin(q.x * 14.0 + sin(q.y * 9.0 + t) * 1.8 + q.y * 5.0 - t * 1.5);
+        float w2 = sin(q.x * 9.0 - q.y * 11.0 + sin(q.x * 6.0 - t) * 2.0 + t);
+        float line = pow(max(0.0, 1.0 - abs(w1) * 3.2), 2.0) * 0.8 + pow(max(0.0, 1.0 - abs(w2) * 4.0), 2.0) * 0.55;
+        float sp = pow(max(0.0, sin(q.x * 70.0 + t * 2.0) * sin(q.y * 64.0 - t)), 14.0);
+        vec3 glass = mix(vec3(0.08, 0.28, 0.85), vec3(0.45, 0.8, 1.0), facet);
+        if (hand) {
+            col = mix(col * 0.55, glass, 0.62) + vec3(0.75, 0.92, 1.0) * line * 0.75 + vec3(sp) * 0.7 + vec3(0.6, 0.9, 1.0) * edge * 0.85;
+        } else {
+            col += vec3(0.25, 0.6, 1.0) * near * 0.55;
+        }
     } else {
         // neon outline: dark hand with a bright pulsing colored edge
         float pulse = 0.65 + 0.35 * sin(t * 2.0);

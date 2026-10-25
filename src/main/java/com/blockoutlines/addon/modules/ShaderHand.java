@@ -17,12 +17,12 @@ import meteordevelopment.orbit.EventHandler;
  * scan lines and a glowing edge. It is a full-screen shader that only touches what is very close to the camera.
  */
 public class ShaderHand extends Module {
-    public enum Look { Gradient, Hologram, Fire, Frost, Gold, Neon }
+    public enum Look { Gradient, Hologram, Fire, Frost, Gold, Neon, Crystal }
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
 
     private final Setting<Look> look = sgGeneral.add(new EnumSetting.Builder<Look>()
-        .name("look").description("Gradient = moving rainbow. Hologram = blue scan lines. Fire = flickering flames. Frost = icy sparkles. Gold = shiny metal. Neon = dark hand with a glowing colored outline.")
+        .name("look").description("Gradient = moving rainbow. Hologram = blue scan lines. Fire = flickering flames. Frost = icy sparkles. Gold = shiny metal. Neon = dark hand with a glowing colored outline. Crystal = see-through blue glass with swirling glint lines.")
         .defaultValue(Look.Gradient).build());
     private final Setting<Double> speed = sgGeneral.add(new DoubleSetting.Builder()
         .name("speed").description("How fast the colors move.").defaultValue(1.0).range(0.2, 4.0).sliderRange(0.3, 3.0).build());
