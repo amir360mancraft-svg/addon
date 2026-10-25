@@ -731,7 +731,7 @@ public class AntiVanish extends Module {
         if (pendingChimes.isEmpty()) return;
         pendingChimes.clear();
         if (alertSound.get() && mc.getSoundManager() != null) {
-            mc.getSoundManager().play(PositionedSoundInstance.ui(SoundEvents.ENTITY_ELDER_GUARDIAN_CURSE, 1.0F, 1.0F));
+            mc.getSoundManager().play(PositionedSoundInstance.master(SoundEvents.ENTITY_ELDER_GUARDIAN_CURSE, 1.0F, 1.0F));
         }
     }
 
