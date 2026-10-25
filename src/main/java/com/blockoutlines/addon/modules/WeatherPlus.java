@@ -196,6 +196,10 @@ public class WeatherPlus extends Module {
         clearAll();
     }
 
+    public boolean wetShaderRunning() {
+        return shaderOn;
+    }
+
     private void clearShader() {
         if (shaderOn && mc.gameRenderer != null) ((GameRendererInvoker) mc.gameRenderer).blockoutlines$clearPostProcessor();
         shaderOn = false;

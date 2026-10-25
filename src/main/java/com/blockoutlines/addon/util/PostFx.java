@@ -21,11 +21,6 @@ public final class PostFx {
     /** 0 = far / light, 1 = close / strong. */
     public static int shockStrong;
 
-    /** 0 = off, 1..24 = animation frame of the hand shader. Set by Shader Hand (it wins over bloom / shock). */
-    public static int handFrame;
-    /** 0 = gradient, 1 = hologram. */
-    public static int handMode;
-
     private static boolean mine;
     private static String last = "";
 
@@ -38,7 +33,7 @@ public final class PostFx {
         if (m == null) return;
         WeatherPlus wp = m.get(WeatherPlus.class);
         boolean blocked = m.isActive(ColorGrading.class) || m.isActive(Saturation.class) || (wp != null && wp.wetShaderRunning());
-        boolean want = bloom > 0 || shockFrame > 0 || handFrame > 0;
+        boolean want = bloom > 0 || shockFrame > 0;
         if (blocked || !want) {
             if (mine) {
                 ((GameRendererInvoker) mc.gameRenderer).blockoutlines$clearPostProcessor();
@@ -48,9 +43,7 @@ public final class PostFx {
             return;
         }
         int f = Math.max(0, Math.min(9, shockFrame));
-        String id = handFrame > 0
-            ? String.format("hand_%d_%02d", Math.max(0, Math.min(1, handMode)), Math.max(0, Math.min(23, handFrame - 1)))
-            : String.format("fx_%d_%d_%d", Math.max(0, Math.min(2, bloom)), f, f == 0 ? 0 : Math.max(0, Math.min(1, shockStrong)));
+        String id = String.format("fx_%d_%d_%d", Math.max(0, Math.min(2, bloom)), f, f == 0 ? 0 : Math.max(0, Math.min(1, shockStrong)));
         // set again every tick: vanilla drops the post effect when the camera entity changes
         ((GameRendererInvoker) mc.gameRenderer).blockoutlines$setPostProcessor(Identifier.of("blockoutlines", id));
         mine = true;

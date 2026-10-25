@@ -2,6 +2,7 @@ package com.blockoutlines.addon.modules;
 
 import com.blockoutlines.addon.BlockOutlinesAddon;
 import com.blockoutlines.addon.util.CosmeticUtil;
+import com.blockoutlines.addon.util.PostFx;
 import meteordevelopment.meteorclient.events.entity.player.AttackEntityEvent;
 import meteordevelopment.meteorclient.events.packets.PacketEvent;
 import meteordevelopment.meteorclient.events.render.Render2DEvent;
@@ -188,6 +189,9 @@ public class KillEffect extends Module {
     private final Setting<Integer> flashStrength = sgEpic.add(new IntSetting.Builder()
         .name("flash-strength").description("How bright the screen flash is (0-255).")
         .defaultValue(150).range(10, 255).sliderRange(30, 255).visible(screenFlash::get).build());
+    private final Setting<Boolean> shockShader = sgEpic.add(new BoolSetting.Builder()
+        .name("screen-shock").description("A real shader: a shock wave runs over the screen at the explosion, with split colors and a short flash. Stronger when you are close. Not used while Color Grading, Saturation or the Weather Plus wet shader is on.")
+        .defaultValue(true).build());
     private final Setting<Boolean> boom = sgEpic.add(new BoolSetting.Builder()
         .name("explosion-sound").description("A deep boom at the explosion and a rumble after the thunder.").defaultValue(true).build());
 
@@ -261,6 +265,8 @@ public class KillEffect extends Module {
     private final Map<Integer, Long> handled = new HashMap<>();
     private final Map<Integer, Long> attacked = new HashMap<>();
     private final Random random = new Random();
+    private long shockStart;
+    private boolean shockStrongNow;
 
     // camera vectors for the current frame
     private double fx, fy, fz, rx, ry, rz, ux, uy, uz;
@@ -276,6 +282,13 @@ public class KillEffect extends Module {
         sparks.clear();
         handled.clear();
         attacked.clear();
+    }
+
+    @Override
+    public void onDeactivate() {
+        shockStart = 0;
+        PostFx.shockFrame = 0;
+        PostFx.apply();
     }
 
     // ------------------------------------------------------------------ detecting deaths
@@ -304,6 +317,10 @@ public class KillEffect extends Module {
         long now = System.currentTimeMillis();
         handled.values().removeIf(t -> now - t > 5000);
         attacked.values().removeIf(t -> now - t > 6000);
+        long sa = now - shockStart;
+        PostFx.shockFrame = (shockShader.get() && shockStart > 0 && sa >= 0 && sa < 700) ? Math.max(1, Math.min(9, 1 + (int) (sa / 700.0 * 9.0))) : 0;
+        PostFx.shockStrong = shockStrongNow ? 1 : 0;
+        PostFx.apply();
         if (!players.get()) return;
         for (PlayerEntity pl : mc.world.getPlayers()) {
             if (pl.getHealth() <= 0f || pl.isDead()) died(pl);
@@ -387,6 +404,11 @@ public class KillEffect extends Module {
             // the moment of collapse: sparks, flash and shock ring
             if (!f.burstDone && age >= collapseEnd) {
                 f.burstDone = true;
+                if (shockShader.get() && mc.player != null) {
+                    double dd = Math.sqrt(mc.player.squaredDistanceTo(f.x, f.y, f.z));
+                    double nr = Math.max(0, 1.0 - dd / Math.max(20.0, range.get() * 0.5));
+                    if (nr > 0.12) { shockStart = now; shockStrongNow = nr > 0.5; }
+                }
                 if (burst.get()) spawnSparks(f);
                 if (boom.get() && mc.world != null) mc.world.playSoundClient(f.x, f.y, f.z, SoundEvents.ENTITY_LIGHTNING_BOLT_IMPACT, SoundCategory.WEATHER, 3f * volume.get().floatValue(), 0.5f, false);
             }

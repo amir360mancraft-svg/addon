@@ -2,6 +2,8 @@ package com.blockoutlines.addon.modules;
 
 import com.blockoutlines.addon.BlockOutlinesAddon;
 import com.blockoutlines.addon.util.CosmeticUtil;
+import com.blockoutlines.addon.util.PostFx;
+import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.renderer.Renderer3D;
 import meteordevelopment.meteorclient.settings.BoolSetting;
@@ -55,6 +57,11 @@ public class LootBeams extends Module {
     private final Setting<Boolean> throughWalls = sgGeneral.add(new BoolSetting.Builder()
         .name("through-walls").description("Also show the beams that are behind blocks.").defaultValue(false).build());
 
+    public enum Glow { Off, Soft, Strong }
+    private final Setting<Glow> glow = sgGeneral.add(new EnumSetting.Builder<Glow>()
+        .name("screen-glow").description("A real shader: the beams and everything bright glow softly. Not used while Color Grading, Saturation or the Weather Plus wet shader is on.")
+        .defaultValue(Glow.Soft).build());
+
     // -------- look
     private final Setting<Double> height = sgLook.add(new DoubleSetting.Builder()
         .name("height").description("How high the beam goes (blocks).").defaultValue(4.5).range(1.0, 16.0).sliderRange(1.0, 10.0).build());
@@ -105,6 +112,8 @@ public class LootBeams extends Module {
     private final Map<Integer, State> states = new HashMap<>();
     private long lastClean;
 
+    private int drawnLast; // beams drawn in the last frame (the glow shader runs only when there are some)
+
     // camera frame (set every frame)
     private double rx, ry, rz, ux, uy, uz;
     private double camX, camY, camZ;
@@ -117,6 +126,8 @@ public class LootBeams extends Module {
     @Override
     public void onDeactivate() {
         states.clear();
+        PostFx.bloom = 0;
+        PostFx.apply();
     }
 
     // ------------------------------------------------------------------ what is valuable
@@ -171,6 +182,12 @@ public class LootBeams extends Module {
         Color c = new Color(a.r, a.g, a.b, 255);
         Color d = CosmeticUtil.lerp(c, new Color(255, 255, 255, 255), 0.35, 255);
         return new Color[]{c, d};
+    }
+
+    @EventHandler
+    private void onTick(TickEvent.Post event) {
+        PostFx.bloom = (mc.world != null && drawnLast > 0) ? glow.get().ordinal() : 0;
+        PostFx.apply();
     }
 
     // ------------------------------------------------------------------ drawing
@@ -233,6 +250,7 @@ public class LootBeams extends Module {
             draw(r, item.getId(), p.x, p.y, p.z, colors(loot, secs), alpha, grow, secs);
             drawn++;
         }
+        drawnLast = drawn;
 
         if (now - lastClean > 2000) {
             lastClean = now;
