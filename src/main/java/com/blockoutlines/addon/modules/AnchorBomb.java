@@ -45,8 +45,8 @@ public class AnchorBomb extends Module {
         .name("key").description("Press this key (while the module is on) to start the bomb.")
         .defaultValue(Keybind.none()).action(this::start).build());
     private final Setting<Double> targetRange = sg.add(new DoubleSetting.Builder()
-        .name("target-range").description("Nearest player within this distance is the target.")
-        .defaultValue(6.0).range(2.0, 12.0).sliderRange(3.0, 10.0).build());
+        .name("target-range").description("The nearest player within this distance is the target. If nobody is there, the block you look at is used.")
+        .defaultValue(12.0).range(2.0, 40.0).sliderRange(4.0, 30.0).build());
     private final Setting<Double> placeRange = sg.add(new DoubleSetting.Builder()
         .name("place-range").description("How far you can reach to place and click.")
         .defaultValue(4.5).range(2.0, 6.0).sliderRange(3.0, 5.5).build());
@@ -107,12 +107,22 @@ public class AnchorBomb extends Module {
             return;
         }
         PlayerEntity target = findTarget();
-        if (target == null) { warning("No target in range."); return; }
-        BlockPos spot = findAnchorSpot(target);
+        Vec3d aimAt;
+        BlockPos base;
+        if (target != null) {
+            aimAt = target.getEntityPos();
+            base = target.getBlockPos();
+        } else if (mc.crosshairTarget instanceof BlockHitResult hr && hr.getType() == net.minecraft.util.hit.HitResult.Type.BLOCK) {
+            aimAt = hr.getPos();
+            base = hr.getBlockPos().offset(hr.getSide());
+        } else {
+            warning("No player in range and you are not looking at a block.");
+            return;
+        }
+        BlockPos spot = findAnchorSpot(base, aimAt);
         if (spot == null) { warning("No good place for the anchor."); return; }
         anchorPos = spot;
-        shieldPos = shield.get() ? findShieldSpot(spot) : null;
-        if (shield.get() && shieldPos == null) info("No room for the shield, continuing without it.");
+        shieldPos = shield.get() ? findShieldSpot(spot) : null; // no room = no shield, nothing is said
         startSlot = mc.player.getInventory().getSelectedSlot();
         stage = 0;
         wait = 0;
@@ -142,19 +152,44 @@ public class AnchorBomb extends Module {
         return mc.player.getEyePos().squaredDistanceTo(Vec3d.ofCenter(p)) <= placeRange.get() * placeRange.get();
     }
 
+    /** Do not pick a spot that has bedrock right above it (roof / floor of the world). */
+    private boolean underBedrock(BlockPos p) {
+        for (int i = 1; i <= 2; i++) {
+            if (mc.world.getBlockState(p.up(i)).isOf(Blocks.BEDROCK)) return true;
+        }
+        return p.getY() <= mc.world.getBottomY() + 1;
+    }
+
+    /** True when you can click the block this spot would be placed against, with nothing in the way (not through a wall). */
+    private boolean canSee(BlockPos p) { return canSee(p, null); }
+
+    private boolean canSee(BlockPos p, BlockPos assumeSolid) {
+        // the anchor spot may be placed against any side that touches a solid block; the shield spot against the anchor
+        Vec3d eye = mc.player.getEyePos();
+        for (Direction d : Direction.values()) {
+            BlockPos n = p.offset(d);
+            if (!n.equals(assumeSolid) && mc.world.getBlockState(n).isReplaceable()) continue;
+            Vec3d face = Vec3d.ofCenter(p).add(d.getOffsetX() * 0.5, d.getOffsetY() * 0.5, d.getOffsetZ() * 0.5);
+            if (eye.squaredDistanceTo(face) > placeRange.get() * placeRange.get()) continue;
+            net.minecraft.world.RaycastContext ctx = new net.minecraft.world.RaycastContext(eye, face,
+                net.minecraft.world.RaycastContext.ShapeType.COLLIDER, net.minecraft.world.RaycastContext.FluidHandling.NONE, mc.player);
+            net.minecraft.util.hit.BlockHitResult r = mc.world.raycast(ctx);
+            if (r.getType() == net.minecraft.util.hit.HitResult.Type.MISS || r.getBlockPos().equals(n)) return true;
+        }
+        return false;
+    }
+
     /** The lowest free block next to / under / above the target that has something to stand against, close enough for you. */
-    private BlockPos findAnchorSpot(PlayerEntity t) {
-        BlockPos feet = t.getBlockPos();
+    private BlockPos findAnchorSpot(BlockPos feet, Vec3d aimAt) {
         BlockPos best = null;
         double bestScore = Double.MAX_VALUE;
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) {
                 for (int dy = -2; dy <= 2; dy++) {
                     BlockPos p = feet.add(dx, dy, dz);
-                    if (!free(p) || !reachable(p)) continue;
-                    if (BlockUtils.getPlaceSide(p) == null) continue;
+                    if (!free(p) || !reachable(p) || !canSee(p) || underBedrock(p)) continue;
                     // lowest first, then closest to the target, then closest to you
-                    double score = p.getY() * 100.0 + Vec3d.ofCenter(p).squaredDistanceTo(t.getEntityPos()) * 5.0
+                    double score = p.getY() * 100.0 + Vec3d.ofCenter(p).squaredDistanceTo(aimAt) * 5.0
                         + mc.player.squaredDistanceTo(Vec3d.ofCenter(p)) * 0.1;
                     // never pick the block you are standing in
                     if (p.equals(mc.player.getBlockPos()) || p.equals(mc.player.getBlockPos().up())) continue;
@@ -177,11 +212,11 @@ public class AnchorBomb extends Module {
         }
         for (Direction d : order) {
             BlockPos p = anchor.offset(d);
-            if (free(p) && reachable(p)) return p;
+            if (free(p) && reachable(p) && canSee(p, anchor)) return p;
         }
         if (dy > 0.8) {
             BlockPos p = anchor.up();
-            if (free(p) && reachable(p)) return p;
+            if (free(p) && reachable(p) && canSee(p, anchor)) return p;
         }
         return null;
     }
