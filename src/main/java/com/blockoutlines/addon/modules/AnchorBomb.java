@@ -53,6 +53,9 @@ public class AnchorBomb extends Module {
     private final Setting<Boolean> shield = sg.add(new BoolSetting.Builder()
         .name("glowstone-shield").description("Place a Glowstone block between you and the anchor so you take less damage.")
         .defaultValue(true).build());
+    private final Setting<Boolean> blastFallback = sg.add(new BoolSetting.Builder()
+        .name("blast-fallback").description("When there is no good place at all, just place the anchor (no shield) and explode it so space opens up for the next try.")
+        .defaultValue(true).build());
     private final Setting<Boolean> silent = sg.add(new BoolSetting.Builder()
         .name("silent-rotation").description("Look at each block on the server only; your own camera does not move.")
         .defaultValue(true).build());
@@ -119,10 +122,21 @@ public class AnchorBomb extends Module {
             warning("No player in range and you are not looking at a block.");
             return;
         }
-        BlockPos spot = findAnchorSpot(base, aimAt);
+        boolean noShield = false;
+        BlockPos spot = findAnchorSpot(base, aimAt, 1, -2, 2, false, true);
+        if (spot == null) {
+            // 2: the "floor" layout, anchor and Glowstone side by side on the ground a bit further away
+            spot = findAnchorSpot(base, aimAt, 3, -3, 1, true, false);
+            if (spot != null) info("Using the floor layout.");
+        }
+        if (spot == null && blastFallback.get()) {
+            // 3: no good place at all: put just the anchor anywhere legit and blow it, to open up a place
+            spot = findAnchorSpot(base, aimAt, 4, -3, 3, false, false);
+            if (spot != null) { noShield = true; info("No good place: only the anchor is placed and blown to open up space."); }
+        }
         if (spot == null) { warning("No good place for the anchor."); return; }
         anchorPos = spot;
-        shieldPos = shield.get() ? findShieldSpot(spot) : null; // no room = no shield, nothing is said
+        shieldPos = shield.get() && !noShield ? findShieldSpot(spot) : null; // no room = no shield, nothing is said
         startSlot = mc.player.getInventory().getSelectedSlot();
         stage = 0;
         wait = 0;
@@ -214,16 +228,17 @@ public class AnchorBomb extends Module {
     }
 
     /** The lowest free block next to / under / above the target that has something to stand against, close enough for you. */
-    private BlockPos findAnchorSpot(BlockPos feet, Vec3d aimAt) {
+    private BlockPos findAnchorSpot(BlockPos feet, Vec3d aimAt, int radius, int dyMin, int dyMax, boolean floorOnly, boolean lowestFirst) {
         BlockPos best = null;
         double bestScore = Double.MAX_VALUE;
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dz = -1; dz <= 1; dz++) {
-                for (int dy = -2; dy <= 2; dy++) {
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dz = -radius; dz <= radius; dz++) {
+                for (int dy = dyMin; dy <= dyMax; dy++) {
                     BlockPos p = feet.add(dx, dy, dz);
                     if (!free(p) || !reachable(p) || !canSee(p) || underBedrock(p)) continue;
                     // lowest first, then closest to the target, then closest to you
-                    double score = p.getY() * 100.0 + Vec3d.ofCenter(p).squaredDistanceTo(aimAt) * 5.0
+                    if (floorOnly && mc.world.getBlockState(p.down()).isReplaceable()) continue;
+                    double score = (lowestFirst ? p.getY() * 100.0 : p.getY() * 2.0) + Vec3d.ofCenter(p).squaredDistanceTo(aimAt) * 5.0
                         + mc.player.squaredDistanceTo(Vec3d.ofCenter(p)) * 0.1;
                     // never pick the block you are standing in
                     if (p.equals(mc.player.getBlockPos()) || p.equals(mc.player.getBlockPos().up())) continue;
