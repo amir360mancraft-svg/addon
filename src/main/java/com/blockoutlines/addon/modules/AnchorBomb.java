@@ -161,22 +161,42 @@ public class AnchorBomb extends Module {
     }
 
     /** True when you can click the block this spot would be placed against, with nothing in the way (not through a wall). */
-    private boolean canSee(BlockPos p) { return canSee(p, null); }
+    private boolean canSee(BlockPos p) { return findFace(p, null) != null; }
 
-    private boolean canSee(BlockPos p, BlockPos assumeSolid) {
-        // the anchor spot may be placed against any side that touches a solid block; the shield spot against the anchor
+    private boolean canSee(BlockPos p, BlockPos assumeSolid) { return findFace(p, assumeSolid) != null; }
+
+    /** The face we click and the exact point on it. */
+    private record Face(BlockPos neighbour, Direction side, Vec3d hit) {}
+
+    /**
+     * A legit way to place a block at p: click a face of a solid neighbour that you can reach and that you see directly
+     * (the ray from your eyes hits exactly that face first, nothing in between). Null when there is none.
+     */
+    private Face findFace(BlockPos p, BlockPos assumeSolid) {
         Vec3d eye = mc.player.getEyePos();
+        Face best = null;
+        double bestD = Double.MAX_VALUE;
         for (Direction d : Direction.values()) {
             BlockPos n = p.offset(d);
-            if (!n.equals(assumeSolid) && mc.world.getBlockState(n).isReplaceable()) continue;
+            boolean assumed = n.equals(assumeSolid);
+            if (!assumed && mc.world.getBlockState(n).isReplaceable()) continue;
+            Direction side = d.getOpposite(); // the face of the neighbour we click
             Vec3d face = Vec3d.ofCenter(p).add(d.getOffsetX() * 0.5, d.getOffsetY() * 0.5, d.getOffsetZ() * 0.5);
-            if (eye.squaredDistanceTo(face) > placeRange.get() * placeRange.get()) continue;
+            double dist = eye.squaredDistanceTo(face);
+            if (dist > placeRange.get() * placeRange.get()) continue;
+            // you can only click a face that points towards you
+            Vec3d toEye = eye.subtract(face);
+            if (side.getOffsetX() * toEye.x + side.getOffsetY() * toEye.y + side.getOffsetZ() * toEye.z <= 0) continue;
             net.minecraft.world.RaycastContext ctx = new net.minecraft.world.RaycastContext(eye, face,
                 net.minecraft.world.RaycastContext.ShapeType.COLLIDER, net.minecraft.world.RaycastContext.FluidHandling.NONE, mc.player);
             net.minecraft.util.hit.BlockHitResult r = mc.world.raycast(ctx);
-            if (r.getType() == net.minecraft.util.hit.HitResult.Type.MISS || r.getBlockPos().equals(n)) return true;
+            boolean ok;
+            if (assumed) ok = r.getType() == net.minecraft.util.hit.HitResult.Type.MISS;
+            else ok = r.getType() == net.minecraft.util.hit.HitResult.Type.BLOCK && r.getBlockPos().equals(n) && r.getSide() == side;
+            if (!ok) continue;
+            if (dist < bestD) { bestD = dist; best = new Face(n, side, face); }
         }
-        return false;
+        return best;
     }
 
     /** The lowest free block next to / under / above the target that has something to stand against, close enough for you. */
@@ -249,25 +269,16 @@ public class AnchorBomb extends Module {
     private void placeBlock(BlockPos pos, net.minecraft.item.Item item, boolean isAnchor) {
         FindItemResult it = InvUtils.findInHotbar(item);
         if (!it.found()) return;
-        // click against a neighbour (the anchor itself counts for the shield)
-        Direction side = BlockUtils.getPlaceSide(pos);
-        BlockPos neighbour;
-        Vec3d hit = Vec3d.ofCenter(pos);
-        if (side == null) {
-            side = Direction.UP;
-            neighbour = pos;
-        } else {
-            neighbour = pos.offset(side);
-            hit = hit.add(side.getOffsetX() * 0.5, side.getOffsetY() * 0.5, side.getOffsetZ() * 0.5);
-        }
-        BlockHitResult bhr = new BlockHitResult(hit, side.getOpposite(), neighbour, false);
-        final Vec3d aim = hit;
+        if (!free(pos)) return;
+        // check again right now: the face must still be a legit one (for the shield the anchor is in the world by now)
+        Face f = findFace(pos, null);
+        if (f == null) return;
+        BlockHitResult bhr = new BlockHitResult(f.hit(), f.side(), f.neighbour(), false);
         final int slot = it.slot();
-        Runnable act = () -> {
+        rotateThen(f.hit(), () -> {
             InvUtils.swap(slot, false);
             BlockUtils.interact(bhr, Hand.MAIN_HAND, true);
-        };
-        rotateThen(aim, act);
+        });
     }
 
     /** charge = right click with Glowstone; otherwise right click with something else to make it explode. */
@@ -283,12 +294,31 @@ public class AnchorBomb extends Module {
             slot = nonGlowSlot();
         }
         if (slot < 0) return;
-        Vec3d c = Vec3d.ofCenter(anchorPos);
-        BlockHitResult bhr = new BlockHitResult(c, Direction.UP, anchorPos, false);
+        // click a face of the anchor that you really see and can reach
+        Vec3d eye = mc.player.getEyePos();
+        BlockHitResult bhr = null;
+        double bd = Double.MAX_VALUE;
+        for (Direction d : Direction.values()) {
+            Vec3d face = Vec3d.ofCenter(anchorPos).add(d.getOffsetX() * 0.5, d.getOffsetY() * 0.5, d.getOffsetZ() * 0.5);
+            double dist = eye.squaredDistanceTo(face);
+            if (dist > placeRange.get() * placeRange.get() || dist >= bd) continue;
+            Vec3d toEye = eye.subtract(face);
+            if (d.getOffsetX() * toEye.x + d.getOffsetY() * toEye.y + d.getOffsetZ() * toEye.z <= 0) continue;
+            net.minecraft.world.RaycastContext ctx = new net.minecraft.world.RaycastContext(eye, face,
+                net.minecraft.world.RaycastContext.ShapeType.COLLIDER, net.minecraft.world.RaycastContext.FluidHandling.NONE, mc.player);
+            net.minecraft.util.hit.BlockHitResult r = mc.world.raycast(ctx);
+            if (r.getType() == net.minecraft.util.hit.HitResult.Type.BLOCK && r.getBlockPos().equals(anchorPos) && r.getSide() == d) {
+                bd = dist;
+                bhr = new BlockHitResult(face, d, anchorPos, false);
+            }
+        }
+        if (bhr == null) return;
+        final Vec3d c = bhr.getPos();
+        final BlockHitResult click = bhr;
         final int s = slot;
         rotateThen(c, () -> {
             InvUtils.swap(s, false);
-            BlockUtils.interact(bhr, Hand.MAIN_HAND, true);
+            BlockUtils.interact(click, Hand.MAIN_HAND, true);
         });
     }
 
