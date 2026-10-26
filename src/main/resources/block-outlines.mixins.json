@@ -17,7 +17,9 @@
     "TextureManagerAccessor",
     "GameRendererHandMixin",
     "SwingDurationMixin",
-    "ScreenBackgroundMixin"
+    "ScreenBackgroundMixin",
+    "TextVisitFactoryMixin",
+    "PlayerListHudMixin"
   ],
   "injectors": {
     "defaultRequire": 1
