@@ -39,6 +39,7 @@ import net.minecraft.world.World;
  */
 public class AnchorBomb extends Module {
     private final SettingGroup sg = settings.getDefaultGroup();
+    private final SettingGroup sgAuto = settings.createGroup("Auto");
     private final SettingGroup sgRender = settings.createGroup("Render");
 
     private final Setting<Keybind> key = sg.add(new KeybindSetting.Builder()
@@ -67,6 +68,17 @@ public class AnchorBomb extends Module {
     private final Setting<Boolean> noFriends = sg.add(new BoolSetting.Builder()
         .name("ignore-friends").description("Friends are never the target.").defaultValue(true).build());
 
+    private final Setting<Integer> bombs = sgAuto.add(new IntSetting.Builder()
+        .name("bombs-per-press").description("How many bombs one key press does, one after the other (each on a new target spot).")
+        .defaultValue(1).range(1, 6).sliderRange(1, 6).build());
+    private final Setting<Integer> repeatDelay = sgAuto.add(new IntSetting.Builder()
+        .name("ticks-between-bombs").description("Wait between two bombs.").defaultValue(6).range(2, 40).sliderRange(2, 20).visible(() -> bombs.get() > 1).build());
+    private final Setting<Boolean> autoRefill = sgAuto.add(new BoolSetting.Builder()
+        .name("auto-refill").description("When the hotbar has no anchor / not enough Glowstone, really open your inventory and move them to the hotbar with normal clicks, with small random pauses.")
+        .defaultValue(true).build());
+    private final Setting<Integer> refillDelay = sgAuto.add(new IntSetting.Builder()
+        .name("refill-delay").description("Ticks between the inventory steps (a random 0-2 is added).").defaultValue(4).range(2, 12).sliderRange(2, 10).visible(autoRefill::get).build());
+
     private final Setting<Boolean> render = sgRender.add(new BoolSetting.Builder()
         .name("render").description("Show the anchor and shield spot.").defaultValue(true).build());
     private final Setting<SettingColor> anchorColor = sgRender.add(new ColorSetting.Builder()
@@ -74,7 +86,11 @@ public class AnchorBomb extends Module {
     private final Setting<SettingColor> shieldColor = sgRender.add(new ColorSetting.Builder()
         .name("shield-color").description("Color of the shield spot.").defaultValue(new SettingColor(255, 210, 80, 60)).visible(render::get).build());
 
-    private int stage = -1;       // -1 idle, 0 place, 1 shield, 2 charge, 3 explode
+    private int stage = -1;       // -2 waiting for the next bomb, -1 idle, 0 place, 1 shield, 2 charge, 3 explode
+    private int bombsLeft, gapWait, refillState = -1, refillWait;
+    private boolean justRefilled;
+    private final java.util.ArrayDeque<net.minecraft.item.Item> refillQueue = new java.util.ArrayDeque<>();
+    private final java.util.Random rnd = new java.util.Random();
     private int wait;
     private BlockPos anchorPos, shieldPos;
     private int startSlot = -1;
@@ -90,25 +106,60 @@ public class AnchorBomb extends Module {
 
     private void reset() {
         stage = -1;
+        refillState = -1;
+        refillQueue.clear();
+        bombsLeft = 0;
+        justRefilled = false;
         anchorPos = shieldPos = null;
         wait = 0;
     }
 
     // ------------------------------------------------------------------ start / plan
 
+    private int hotbarCount(net.minecraft.item.Item item) {
+        int n = 0;
+        for (int i = 0; i < 9; i++) {
+            net.minecraft.item.ItemStack st = mc.player.getInventory().getStack(i);
+            if (st.isOf(item)) n += st.getCount();
+        }
+        return n;
+    }
+
+    private boolean inInventory(net.minecraft.item.Item item) {
+        for (int i = 9; i < 36; i++) if (mc.player.getInventory().getStack(i).isOf(item)) return true;
+        return false;
+    }
+
     private void start() {
-        if (mc.player == null || mc.world == null || stage != -1) return;
+        if (mc.player == null || mc.world == null || stage != -1 || refillState >= 0) return;
+        bombsLeft = bombs.get();
+        justRefilled = false;
+        begin(true);
+    }
+
+    private void begin(boolean first) {
         if (mc.world.getRegistryKey() == World.NETHER) {
             warning("Anchors do not explode in the Nether.");
+            bombsLeft = 0;
             return;
         }
-        FindItemResult anchor = InvUtils.findInHotbar(Items.RESPAWN_ANCHOR);
-        FindItemResult glow = InvUtils.findInHotbar(Items.GLOWSTONE);
-        if (!anchor.found()) { warning("No Respawn Anchor in your hotbar."); return; }
-        if (!glow.found() || (shield.get() && glow.count() < 2)) {
-            warning(shield.get() ? "You need at least 2 Glowstone in the hotbar (charge + shield)." : "No Glowstone in your hotbar.");
+        boolean needAnchor = hotbarCount(Items.RESPAWN_ANCHOR) < 1;
+        boolean needGlow = hotbarCount(Items.GLOWSTONE) < (shield.get() ? 2 : 1);
+        if (needAnchor || needGlow) {
+            if (autoRefill.get() && !justRefilled
+                && ((needAnchor && inInventory(Items.RESPAWN_ANCHOR)) || (needGlow && inInventory(Items.GLOWSTONE)))) {
+                refillQueue.clear();
+                if (needAnchor) refillQueue.add(Items.RESPAWN_ANCHOR);
+                if (needGlow) refillQueue.add(Items.GLOWSTONE);
+                refillState = 0;
+                refillWait = 0;
+                return;
+            }
+            warning(needAnchor ? "No Respawn Anchor in your hotbar." : (shield.get() ? "You need at least 2 Glowstone in the hotbar (charge + shield)." : "No Glowstone in your hotbar."));
+            bombsLeft = 0;
             return;
         }
+        justRefilled = false;
         PlayerEntity target = findTarget();
         Vec3d aimAt;
         BlockPos base;
@@ -119,7 +170,8 @@ public class AnchorBomb extends Module {
             aimAt = hr.getPos();
             base = hr.getBlockPos().offset(hr.getSide());
         } else {
-            warning("No player in range and you are not looking at a block.");
+            if (first) warning("No player in range and you are not looking at a block.");
+            bombsLeft = 0;
             return;
         }
         boolean noShield = false;
@@ -134,7 +186,7 @@ public class AnchorBomb extends Module {
             spot = findAnchorSpot(base, aimAt, 4, -3, 3, false, false);
             if (spot != null) { noShield = true; info("No good place: only the anchor is placed and blown to open up space."); }
         }
-        if (spot == null) { warning("No good place for the anchor."); return; }
+        if (spot == null) { warning("No good place for the anchor."); bombsLeft = 0; return; }
         anchorPos = spot;
         shieldPos = shield.get() && !noShield ? findShieldSpot(spot) : null; // no room = no shield, nothing is said
         startSlot = mc.player.getInventory().getSelectedSlot();
@@ -274,8 +326,13 @@ public class AnchorBomb extends Module {
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
+        if (mc.player == null || mc.world == null) { if (stage != -1 || refillState >= 0) reset(); return; }
+        if (refillState >= 0) { tickRefill(); return; }
+        if (stage == -2) {
+            if (--gapWait <= 0) { stage = -1; begin(false); }
+            return;
+        }
         if (stage < 0) return;
-        if (mc.player == null || mc.world == null) { reset(); return; }
         if (wait > 0) { wait--; return; }
 
         switch (stage) {
@@ -291,7 +348,57 @@ public class AnchorBomb extends Module {
         wait = gap.get() - 1;
         if (stage > 3) {
             if (swapBack.get() && startSlot >= 0) InvUtils.swap(startSlot, false);
+            int left = bombsLeft - 1;
             reset();
+            if (left > 0) { bombsLeft = left; stage = -2; gapWait = repeatDelay.get(); }
+        }
+    }
+
+    // ------------------------------------------------------------------ refill (a real inventory screen, normal clicks)
+
+    private int pause() {
+        return refillDelay.get() + rnd.nextInt(3);
+    }
+
+    private void tickRefill() {
+        if (refillWait > 0) { refillWait--; return; }
+        switch (refillState) {
+            case 0 -> {
+                mc.setScreen(new net.minecraft.client.gui.screen.ingame.InventoryScreen(mc.player));
+                refillState = 1;
+                refillWait = pause();
+            }
+            case 1 -> {
+                net.minecraft.item.Item item = refillQueue.poll();
+                if (item == null) { refillState = 2; refillWait = pause(); return; }
+                int src = -1;
+                for (int i = 9; i < 36; i++) {
+                    if (mc.player.getInventory().getStack(i).isOf(item)) { src = i; break; }
+                }
+                if (src >= 0) {
+                    int empty = -1;
+                    for (int i = 0; i < 9; i++) {
+                        if (mc.player.getInventory().getStack(i).isEmpty()) { empty = i; break; }
+                    }
+                    int sync = mc.player.currentScreenHandler.syncId;
+                    if (empty >= 0) {
+                        // like hovering the item and pressing the number key of an empty hotbar slot
+                        mc.interactionManager.clickSlot(sync, src, empty, net.minecraft.screen.slot.SlotActionType.SWAP, mc.player);
+                    } else {
+                        // like shift-clicking it: it goes to the hotbar
+                        mc.interactionManager.clickSlot(sync, src, 0, net.minecraft.screen.slot.SlotActionType.QUICK_MOVE, mc.player);
+                    }
+                }
+                refillWait = pause();
+            }
+            case 2 -> {
+                mc.player.closeHandledScreen();
+                refillState = -1;
+                justRefilled = true;
+                stage = -2;
+                gapWait = 2 + rnd.nextInt(3);
+            }
+            default -> refillState = -1;
         }
     }
 
