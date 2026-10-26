@@ -20,6 +20,7 @@ import com.blockoutlines.addon.modules.AfkClicker;
 import com.blockoutlines.addon.modules.AntiVanish;
 import com.blockoutlines.addon.modules.AuroraSky;
 import com.blockoutlines.addon.modules.FloatingHands;
+import com.blockoutlines.addon.modules.AnchorBomb;
 import com.blockoutlines.addon.modules.PenguinCompanion;
 import com.blockoutlines.addon.modules.ShaderHand;
 import com.blockoutlines.addon.modules.SwordTrails;
@@ -124,12 +125,13 @@ public class BlockOutlinesAddon extends MeteorAddon {
         Modules.get().add(new LootBeams());
         Modules.get().add(new AfkClicker());
         Modules.get().add(new AntiVanish());
+        Modules.get().add(new FloatingHands());
+        Modules.get().add(new AuroraSky());
+        Modules.get().add(new ShaderHand());
+        Modules.get().add(new PenguinCompanion());
+        Modules.get().add(new AnchorBomb());
         Modules.get().add(new WeatherPlus());
         Modules.get().add(new SwordTrails());
-        Modules.get().add(new AuroraSky());
-        Modules.get().add(new FloatingHands());
-        Modules.get().add(new PenguinCompanion());
-        Modules.get().add(new ShaderHand());
         LOG.info("Better Render loaded");
     }
 
