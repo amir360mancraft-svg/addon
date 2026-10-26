@@ -21,13 +21,14 @@ public final class PostFx {
     /** 0 = far / light, 1 = close / strong. */
     public static int shockStrong;
 
-    /** 0 = off, 1..16 = animation frame of the hand shader. Set by Shader Hand (it wins over bloom / shock). */
+    /** 0 = off, 1..60 = animation frame of the hand shader. Set by Shader Hand (it wins over bloom / shock). */
     public static int handFrame;
     /** 0 = gradient, 1 = hologram. */
     public static int handMode;
 
     private static boolean mine;
     private static String last = "";
+    private static int refresh;
 
     private PostFx() {}
 
@@ -49,10 +50,14 @@ public final class PostFx {
         }
         int f = Math.max(0, Math.min(9, shockFrame));
         String id = handFrame > 0
-            ? String.format("hand_%d_%02d", Math.max(0, Math.min(6, handMode)), Math.max(0, Math.min(15, handFrame - 1)))
+            ? String.format("hand_%d_%02d", Math.max(0, Math.min(6, handMode)), Math.max(0, Math.min(59, handFrame - 1)))
             : String.format("fx_%d_%d_%d", Math.max(0, Math.min(2, bloom)), f, f == 0 ? 0 : Math.max(0, Math.min(1, shockStrong)));
         // set again every tick: vanilla drops the post effect when the camera entity changes
-        ((GameRendererInvoker) mc.gameRenderer).blockoutlines$setPostProcessor(Identifier.of("blockoutlines", id));
+        // only when the effect changes (or now and then, in case vanilla dropped it)
+        if (!id.equals(last) || !mine || ++refresh >= 20) {
+            ((GameRendererInvoker) mc.gameRenderer).blockoutlines$setPostProcessor(Identifier.of("blockoutlines", id));
+            refresh = 0;
+        }
         mine = true;
         last = id;
     }

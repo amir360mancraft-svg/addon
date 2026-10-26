@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Writes the Shader Hand post effects: hand_<look 0-6>_<frame 00-15>.json (the frame is the animation phase).
+"""Writes the Shader Hand post effects: hand_<look 0-6>_<frame 00-59>.json (the frame is the animation phase).
 Run from the project root before building: python3 tools/gen_hand_effects.py"""
 import json, os
 
@@ -7,7 +7,7 @@ out = "src/main/resources/assets/blockoutlines/post_effect"
 os.makedirs(out, exist_ok=True)
 
 for look in range(7):
-    for frame in range(16):
+    for frame in range(60):
         effect = {
             "targets": {"swap": {}},
             "passes": [
@@ -19,7 +19,7 @@ for look in range(7):
                         {"sampler_name": "Depth", "target": "minecraft:main", "use_depth_buffer": True},
                     ],
                     "output": "swap",
-                    "uniforms": {"HandConfig": [{"name": "Params", "type": "vec4", "value": [frame / 16.0, float(look), 0.0, 0.0]}]},
+                    "uniforms": {"HandConfig": [{"name": "Params", "type": "vec4", "value": [frame / 60.0, float(look), 0.0, 0.0]}]},
                 },
                 {
                     "vertex_shader": "minecraft:core/screenquad",

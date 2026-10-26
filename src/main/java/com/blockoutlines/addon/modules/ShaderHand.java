@@ -33,7 +33,7 @@ public class ShaderHand extends Module {
         .name("only-with-item").description("Only when you hold something (empty hand stays normal).").defaultValue(false).build());
     private final Setting<Integer> frozen = sgGeneral.add(new IntSetting.Builder()
         .name("frozen-frame").description("Which frame to show when animate is off (changes the colors/highlight position).")
-        .defaultValue(4).range(1, 16).sliderRange(1, 16).visible(() -> !animate.get()).build());
+        .defaultValue(15).range(1, 60).sliderRange(1, 60).visible(() -> !animate.get()).build());
 
     public ShaderHand() {
         super(BlockOutlinesAddon.EFFECTS, "shader-hand", "A shader look for your first-person hand and held item (not used while Color Grading, Saturation or the wet shader is on).");
@@ -58,7 +58,7 @@ public class ShaderHand extends Module {
         } else {
             if (animate.get()) {
                 long period = (long) (4000.0 / speed.get());
-                PostFx.handFrame = 1 + (int) ((System.currentTimeMillis() % period) * 16L / period);
+                PostFx.handFrame = 1 + (int) ((System.currentTimeMillis() % period) * 60L / period);
             } else PostFx.handFrame = frozen.get();
             PostFx.handMode = look.get().ordinal();
         }

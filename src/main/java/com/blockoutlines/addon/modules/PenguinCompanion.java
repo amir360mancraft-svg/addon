@@ -72,6 +72,7 @@ public class PenguinCompanion extends Module {
 
     private State state = State.SIT;
     private double stateTime, stateLen;
+    private double px, py, pz, pyaw;
     private double x, y, z, yaw, walk, sitFade, lieFade, pitch;
     private double goalX, goalZ;
     private boolean placed;
@@ -116,12 +117,14 @@ public class PenguinCompanion extends Module {
     private void onTick(TickEvent.Post event) {
         if (mc.player == null || mc.world == null) return;
         double dt = 0.05;
+        px = x; py = y; pz = z; pyaw = yaw;
         Vec3d pl = mc.player.getEntityPos();
         if (!placed) {
             double s = surface(pl.x + 1.5, pl.z + 1.5, pl.y);
             x = pl.x + 1.5; z = pl.z + 1.5;
             y = Double.isNaN(s) ? pl.y : s;
             yaw = 0;
+            px = x; py = y; pz = z; pyaw = yaw;
             placed = true;
         }
         double dpx = pl.x - x, dpz = pl.z - z;
@@ -133,7 +136,7 @@ public class PenguinCompanion extends Module {
                 double a = rnd.nextDouble() * Math.PI * 2, d = 2.0 + rnd.nextDouble() * 2.0;
                 double tx = pl.x + Math.cos(a) * d, tz = pl.z + Math.sin(a) * d;
                 double s = surface(tx, tz, pl.y);
-                if (!Double.isNaN(s)) { x = tx; z = tz; y = s; break; }
+                if (!Double.isNaN(s)) { x = tx; z = tz; y = s; px = x; py = y; pz = z; break; }
             }
             changeState(State.SIT, 2 + rnd.nextDouble() * 3);
             return;
@@ -240,7 +243,7 @@ public class PenguinCompanion extends Module {
         double secs = System.currentTimeMillis() / 1000.0;
 
         boolean moving = (state == State.WANDER || state == State.VISIT || state == State.FOLLOW) && speedNow > 0.2;
-        if (!moving) speedNow = Math.max(0, speedNow - dt * 20);
+        if (!moving) speedNow = Math.max(0, speedNow - dt * 8);
         walk += dt * (moving ? 4.5 + speedNow * 1.4 : 0.0);
         sitFade += ((state == State.SIT ? 1.0 : 0.0) - sitFade) * Math.min(1.0, dt * 5.0);
         lieFade += ((state == State.LIE ? 1.0 : 0.0) - lieFade) * Math.min(1.0, dt * 3.0);
@@ -255,8 +258,13 @@ public class PenguinCompanion extends Module {
         double bob = Math.abs(Math.sin(walk)) * 0.025 * (1 - Math.min(1, pitch));
         double sink = -0.06 * sitFade;
 
-        final double oy = y + bob + sink + 0.01, ox = x, oz = z;
-        final double cyw = Math.cos(yaw), syw = Math.sin(yaw);
+        // the behaviour runs 20 times a second; draw smoothly in between
+        double td = Math.max(0, Math.min(1, event.tickDelta));
+        double ix = px + (x - px) * td, iy = py + (y - py) * td, iz = pz + (z - pz) * td;
+        double dy = Math.atan2(Math.sin(yaw - pyaw), Math.cos(yaw - pyaw));
+        double iyaw = pyaw + dy * td;
+        final double oy = iy + bob + sink + 0.01, ox = ix, oz = iz;
+        final double cyw = Math.cos(iyaw), syw = Math.sin(iyaw);
         final double tl = pitch, ct = Math.cos(tl), st = Math.sin(tl);
         final double cr = Math.cos(roll), sr = Math.sin(roll);
         final double sc = s;
