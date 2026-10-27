@@ -7,6 +7,7 @@ import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.ColorSetting;
 import meteordevelopment.meteorclient.settings.DoubleSetting;
+import meteordevelopment.meteorclient.settings.EnumSetting;
 import meteordevelopment.meteorclient.settings.IntSetting;
 import meteordevelopment.meteorclient.settings.KeybindSetting;
 import meteordevelopment.meteorclient.settings.Setting;
@@ -38,7 +39,10 @@ import net.minecraft.world.World;
  * shield is on). Do not hold Glowstone in your offhand (it would charge the anchor again instead of exploding it).
  */
 public class AnchorBomb extends Module {
+    public enum Priority { Closest, LowestHealth }
+
     private final SettingGroup sg = settings.getDefaultGroup();
+    private final SettingGroup sgSmart = settings.createGroup("Smart");
     private final SettingGroup sgAuto = settings.createGroup("Auto");
     private final SettingGroup sgRender = settings.createGroup("Render");
 
@@ -68,6 +72,15 @@ public class AnchorBomb extends Module {
     private final Setting<Boolean> noFriends = sg.add(new BoolSetting.Builder()
         .name("ignore-friends").description("Friends are never the target.").defaultValue(true).build());
 
+    private final Setting<Boolean> predict = sgSmart.add(new BoolSetting.Builder()
+        .name("predict-target").description("Plan for where the target will be in 3 ticks, not where it is now.")
+        .defaultValue(true).build());
+    private final Setting<Priority> priority = sgSmart.add(new EnumSetting.Builder<Priority>()
+        .name("target-priority").description("Closest = nearest player. Lowest health = the weakest player in range.")
+        .defaultValue(Priority.Closest).build());
+    private final Setting<Boolean> humanize = sgSmart.add(new BoolSetting.Builder()
+        .name("humanize").description("Click a slightly different point of the face every time (still a valid click).")
+        .defaultValue(true).build());
     private final Setting<Integer> bombs = sgAuto.add(new IntSetting.Builder()
         .name("bombs-per-press").description("How many bombs one key press does, one after the other (each on a new target spot).")
         .defaultValue(1).range(1, 6).sliderRange(1, 6).build());
@@ -94,6 +107,8 @@ public class AnchorBomb extends Module {
     private int wait;
     private BlockPos anchorPos, shieldPos;
     private int startSlot = -1;
+    private final java.util.Map<java.util.UUID, Vec3d> lastPos = new java.util.HashMap<>();
+    private final java.util.Map<java.util.UUID, Vec3d> speed = new java.util.HashMap<>();
 
     public AnchorBomb() {
         super(BlockOutlinesAddon.COMBAT, "anchor-bomb", "One key: anchor on the lowest good spot near the target, Glowstone shield, charge and explode in 4 ticks.");
@@ -101,6 +116,20 @@ public class AnchorBomb extends Module {
 
     @Override
     public void onDeactivate() {
+        reset();
+    }
+
+    private void trackPlayers() {
+        for (PlayerEntity p : mc.world.getPlayers()) {
+            Vec3d now = p.getEntityPos();
+            Vec3d old = lastPos.put(p.getUuid(), now);
+            if (old != null) speed.put(p.getUuid(), now.subtract(old));
+        }
+    }
+
+    private void abort(String why) {
+        warning(why);
+        if (swapBack.get() && startSlot >= 0) InvUtils.swap(startSlot, false);
         reset();
     }
 
@@ -174,16 +203,21 @@ public class AnchorBomb extends Module {
             bombsLeft = 0;
             return;
         }
+        if (target != null && predict.get()) {
+            Vec3d v = speed.getOrDefault(target.getUuid(), Vec3d.ZERO);
+            aimAt = target.getEntityPos().add(v.x * 3.0, 0, v.z * 3.0); // 3 ticks ahead, sideways only
+            base = BlockPos.ofFloored(aimAt);
+        }
         boolean noShield = false;
-        BlockPos spot = findAnchorSpot(base, aimAt, 1, -2, 2, false, true);
+        BlockPos spot = findAnchorSpot(base, aimAt, 1, -2, 2, false, true, 1);
         if (spot == null) {
             // 2: the "floor" layout, anchor and Glowstone side by side on the ground a bit further away
-            spot = findAnchorSpot(base, aimAt, 3, -3, 1, true, false);
+            spot = findAnchorSpot(base, aimAt, 3, -3, 1, true, false, 2);
             if (spot != null) info("Using the floor layout.");
         }
         if (spot == null && blastFallback.get()) {
             // 3: no good place at all: put just the anchor anywhere legit and blow it, to open up a place
-            spot = findAnchorSpot(base, aimAt, 4, -3, 3, false, false);
+            spot = findAnchorSpot(base, aimAt, 4, -3, 3, false, false, 3);
             if (spot != null) { noShield = true; info("No good place: only the anchor is placed and blown to open up space."); }
         }
         if (spot == null) { warning("No good place for the anchor."); bombsLeft = 0; return; }
@@ -196,12 +230,15 @@ public class AnchorBomb extends Module {
 
     private PlayerEntity findTarget() {
         PlayerEntity best = null;
-        double bd = targetRange.get() * targetRange.get();
+        double bestKey = Double.MAX_VALUE;
+        double r2 = targetRange.get() * targetRange.get();
         for (PlayerEntity p : mc.world.getPlayers()) {
             if (p == mc.player || p.isDead() || p.isSpectator()) continue;
             if (noFriends.get() && Friends.get().isFriend(p)) continue;
             double d = mc.player.squaredDistanceTo(p);
-            if (d < bd) { bd = d; best = p; }
+            if (d > r2) continue;
+            double key = priority.get() == Priority.LowestHealth ? p.getHealth() + p.getAbsorptionAmount() + d * 0.001 : d;
+            if (key < bestKey) { bestKey = key; best = p; }
         }
         return best;
     }
@@ -280,7 +317,7 @@ public class AnchorBomb extends Module {
     }
 
     /** The lowest free block next to / under / above the target that has something to stand against, close enough for you. */
-    private BlockPos findAnchorSpot(BlockPos feet, Vec3d aimAt, int radius, int dyMin, int dyMax, boolean floorOnly, boolean lowestFirst) {
+    private BlockPos findAnchorSpot(BlockPos feet, Vec3d aimAt, int radius, int dyMin, int dyMax, boolean floorOnly, boolean lowestFirst, int tier) {
         BlockPos best = null;
         double bestScore = Double.MAX_VALUE;
         for (int dx = -radius; dx <= radius; dx++) {
@@ -290,10 +327,11 @@ public class AnchorBomb extends Module {
                     if (!free(p) || !reachable(p) || !canSee(p) || underBedrock(p)) continue;
                     // lowest first, then closest to the target, then closest to you
                     if (floorOnly && mc.world.getBlockState(p.down()).isReplaceable()) continue;
-                    double score = (lowestFirst ? p.getY() * 100.0 : p.getY() * 2.0) + Vec3d.ofCenter(p).squaredDistanceTo(aimAt) * 5.0
-                        + mc.player.squaredDistanceTo(Vec3d.ofCenter(p)) * 0.1;
                     // never pick the block you are standing in
                     if (p.equals(mc.player.getBlockPos()) || p.equals(mc.player.getBlockPos().up())) continue;
+                    if (!clickable(p, null)) continue; // you must still be able to click the anchor itself
+                    double score = (lowestFirst ? p.getY() * 100.0 : p.getY() * 2.0) + Vec3d.ofCenter(p).squaredDistanceTo(aimAt) * 5.0
+                        + mc.player.squaredDistanceTo(Vec3d.ofCenter(p)) * 0.1;
                     if (score < bestScore) { bestScore = score; best = p; }
                 }
             }
@@ -301,25 +339,53 @@ public class AnchorBomb extends Module {
         return best;
     }
 
-    /** The block on the side of the anchor that faces you. */
+    /**
+     * The shield: the free block next to the anchor that sits between the anchor and you. It must be placeable the
+     * legit way (not against the anchor), and after it is there you must still see a face of the anchor to charge and
+     * explode it. If no spot is good, there is no shield.
+     */
     private BlockPos findShieldSpot(BlockPos anchor) {
-        Vec3d me = mc.player.getEntityPos();
-        double dx = me.x - (anchor.getX() + 0.5), dz = me.z - (anchor.getZ() + 0.5), dy = mc.player.getEyeY() - (anchor.getY() + 0.5);
-        Direction[] order;
-        if (Math.abs(dx) >= Math.abs(dz)) {
-            order = new Direction[]{dx > 0 ? Direction.EAST : Direction.WEST, dz > 0 ? Direction.SOUTH : Direction.NORTH};
-        } else {
-            order = new Direction[]{dz > 0 ? Direction.SOUTH : Direction.NORTH, dx > 0 ? Direction.EAST : Direction.WEST};
-        }
-        for (Direction d : order) {
+        Vec3d to = mc.player.getEntityPos().add(0, 1.0, 0).subtract(Vec3d.ofCenter(anchor));
+        double len = to.length();
+        if (len < 0.5) return null;
+        Vec3d dir = to.multiply(1.0 / len);
+        BlockPos best = null;
+        double bestDot = 0.35; // it has to face you
+        for (Direction d : Direction.values()) {
+            double dot = d.getOffsetX() * dir.x + d.getOffsetY() * dir.y + d.getOffsetZ() * dir.z;
+            if (dot <= bestDot) continue;
             BlockPos p = anchor.offset(d);
-            if (free(p) && reachable(p) && canSee(p, anchor)) return p;
+            if (!free(p) || !reachable(p) || !canSee(p, anchor)) continue;
+            if (p.equals(mc.player.getBlockPos()) || p.equals(mc.player.getBlockPos().up())) continue;
+            if (!clickable(anchor, p)) continue;
+            bestDot = dot;
+            best = p;
         }
-        if (dy > 0.8) {
-            BlockPos p = anchor.up();
-            if (free(p) && reachable(p) && canSee(p, anchor)) return p;
+        return best;
+    }
+
+    /** True when, with an optional shield block in place, a face of the anchor is visible and in reach from both eye positions. */
+    private boolean clickable(BlockPos anchor, BlockPos shield) {
+        Vec3d[] es = eyes();
+        for (Direction d : Direction.values()) {
+            Vec3d face = Vec3d.ofCenter(anchor).add(d.getOffsetX() * 0.5, d.getOffsetY() * 0.5, d.getOffsetZ() * 0.5);
+            Vec3d end = face.subtract(d.getOffsetX() * 0.02, d.getOffsetY() * 0.02, d.getOffsetZ() * 0.02);
+            boolean ok = true;
+            for (Vec3d eye : es) {
+                if (eye.squaredDistanceTo(face) > placeRange.get() * placeRange.get()) { ok = false; break; }
+                Vec3d toEye = eye.subtract(face);
+                if (d.getOffsetX() * toEye.x + d.getOffsetY() * toEye.y + d.getOffsetZ() * toEye.z <= 0) { ok = false; break; }
+                net.minecraft.util.hit.BlockHitResult r = net.minecraft.world.BlockView.raycast(eye, end, Boolean.TRUE, (ctx, pos) -> {
+                    net.minecraft.util.shape.VoxelShape shape = (pos.equals(anchor) || pos.equals(shield))
+                        ? net.minecraft.util.shape.VoxelShapes.fullCube()
+                        : mc.world.getBlockState(pos).getCollisionShape(mc.world, pos);
+                    return shape.raycast(eye, end, pos);
+                }, ctx -> null);
+                if (r == null || !r.getBlockPos().equals(anchor) || r.getSide() != d) { ok = false; break; }
+            }
+            if (ok) return true;
         }
-        return null;
+        return false;
     }
 
     // ------------------------------------------------------------------ the four ticks
@@ -327,6 +393,7 @@ public class AnchorBomb extends Module {
     @EventHandler
     private void onTick(TickEvent.Pre event) {
         if (mc.player == null || mc.world == null) { if (stage != -1 || refillState >= 0) reset(); return; }
+        trackPlayers();
         if (refillState >= 0) { tickRefill(); return; }
         if (stage == -2) {
             if (--gapWait <= 0) { stage = -1; begin(false); }
@@ -334,6 +401,11 @@ public class AnchorBomb extends Module {
         }
         if (stage < 0) return;
         if (wait > 0) { wait--; return; }
+        // the anchor must really stand there (the server may have refused the click): otherwise stop
+        if (stage >= 1 && (anchorPos == null || mc.world.getBlockState(anchorPos).getBlock() != Blocks.RESPAWN_ANCHOR)) {
+            abort("The anchor is not there (the server did not accept it).");
+            return;
+        }
 
         switch (stage) {
             case 0 -> placeBlock(anchorPos, Items.RESPAWN_ANCHOR, true);
@@ -344,6 +416,7 @@ public class AnchorBomb extends Module {
             case 3 -> clickAnchor(false);
             default -> { }
         }
+        if (stage < 0) return; // aborted inside the step
         stage++;
         wait = gap.get() - 1;
         if (stage > 3) {
@@ -402,6 +475,16 @@ public class AnchorBomb extends Module {
         }
     }
 
+    /** A random point on the same face, not far from its middle. */
+    private Vec3d jitter(Vec3d hit, Direction side) {
+        double a = (rnd.nextDouble() - 0.5) * 0.5, b = (rnd.nextDouble() - 0.5) * 0.5;
+        return switch (side.getAxis()) {
+            case X -> hit.add(0, a, b);
+            case Y -> hit.add(a, 0, b);
+            default -> hit.add(a, b, 0);
+        };
+    }
+
     private void placeBlock(BlockPos pos, net.minecraft.item.Item item, boolean isAnchor) {
         FindItemResult it = InvUtils.findInHotbar(item);
         if (!it.found()) return;
@@ -409,9 +492,10 @@ public class AnchorBomb extends Module {
         // check again right now: the face must still be a legit one (for the shield the anchor is in the world by now)
         Face f = findFace(pos, null, isAnchor ? null : anchorPos);
         if (f == null) return;
-        BlockHitResult bhr = new BlockHitResult(f.hit(), f.side(), f.neighbour(), false);
+        Vec3d hitAt = humanize.get() ? jitter(f.hit(), f.side()) : f.hit();
+        BlockHitResult bhr = new BlockHitResult(hitAt, f.side(), f.neighbour(), false);
         final int slot = it.slot();
-        rotateThen(f.hit(), () -> {
+        rotateThen(hitAt, () -> {
             InvUtils.swap(slot, false);
             BlockUtils.interact(bhr, Hand.MAIN_HAND, true);
         });
@@ -420,7 +504,6 @@ public class AnchorBomb extends Module {
     /** charge = right click with Glowstone; otherwise right click with something else to make it explode. */
     private void clickAnchor(boolean charge) {
         if (anchorPos == null) return;
-        if (mc.world.getBlockState(anchorPos).getBlock() != Blocks.RESPAWN_ANCHOR) return;
         if (charge && mc.world.getBlockState(anchorPos).contains(net.minecraft.block.RespawnAnchorBlock.CHARGES)
             && mc.world.getBlockState(anchorPos).get(net.minecraft.block.RespawnAnchorBlock.CHARGES) > 0) return; // already charged
         int slot;
