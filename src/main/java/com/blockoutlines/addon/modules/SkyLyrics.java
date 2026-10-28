@@ -5,6 +5,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.mojang.blaze3d.systems.RenderSystem;
 import meteordevelopment.meteorclient.events.render.Render2DEvent;
 import meteordevelopment.meteorclient.events.render.Render3DEvent;
 import meteordevelopment.meteorclient.renderer.text.TextRenderer;
@@ -20,6 +21,8 @@ import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.util.math.Vec3d;
+import org.joml.Matrix3x2f;
+import org.joml.Matrix4f;
 import org.joml.Vector3d;
 
 import java.net.URI;
@@ -44,6 +47,8 @@ public class SkyLyrics extends Module {
     private final SettingGroup sg = settings.getDefaultGroup();
     private final SettingGroup sgLook = settings.createGroup("Look");
 
+    private final Setting<Boolean> inWorld = sg.add(new BoolSetting.Builder().name("in-world-3d")
+        .description("ON: real 3D text hanging in the world where the song started (walk around it, it gets bigger when you come close). OFF: flat sky style that follows you.").defaultValue(true).build());
     private final Setting<Boolean> recenter = sg.add(new BoolSetting.Builder().name("recenter-on-new-song")
         .description("Puts the text in front of you every time a new song starts.").defaultValue(true).build());
     private final Setting<Integer> offsetMs = sg.add(new IntSetting.Builder().name("sync-offset-ms")
@@ -88,6 +93,9 @@ public class SkyLyrics extends Module {
     private boolean fetching;
 
     private double cx, cy, cz;
+    private double ox, oy, oz;
+    private final Vector3d v1 = new Vector3d();
+    private final Vector3d v2 = new Vector3d();
     private double anchorYaw;
     private boolean haveAnchor;
     private int lastIndex = -2;
@@ -228,6 +236,9 @@ public class SkyLyrics extends Module {
 
         if (!haveAnchor || (recenter.get() && !key.equals(lastShownKey))) {
             anchorYaw = Math.toRadians(mc.player.getYaw());
+            ox = cx;
+            oy = cy;
+            oz = cz;
             haveAnchor = true;
         }
         lastShownKey = key;
@@ -300,15 +311,44 @@ public class SkyLyrics extends Module {
             double dx = -Math.sin(yawA) * Math.cos(elev);
             double dy = Math.sin(elev);
             double dz = Math.cos(yawA) * Math.cos(elev);
-            tmp.set(cx + dx * d, cy + dy * d, cz + dz * d);
+            boolean w3 = inWorld.get();
+            double bx = w3 ? ox : cx, by = w3 ? oy : cy, bz = w3 ? oz : cz;
+            tmp.set(bx + dx * d, by + dy * d, bz + dz * d);
 
-            double sc = size.get() * (1.0 - 0.22 * Math.min(1.0, Math.abs(rel)));
+            double ls = 1.0 - 0.22 * Math.min(1.0, Math.abs(rel));
             // a note line pulses
             boolean notes = str.startsWith("\u266A");
-            if (notes) sc *= 1.0 + 0.06 * Math.sin(time * 4.0);
-            if (!NametagUtils.to2D(tmp, sc)) continue;
+            if (notes) ls *= 1.0 + 0.06 * Math.sin(time * 4.0);
+
+            float m00 = 1, m01 = 0, m10 = 0, m11 = 1;
+            if (w3) {
+                // the text is a flat plane facing the point where the song started; we only draw it from the front
+                double nx = Math.sin(anchorYaw), nz = -Math.cos(anchorYaw);
+                if ((cx - tmp.x) * nx + (cz - tmp.z) * nz <= 0) continue;
+                double fov = Math.toRadians(mc.options.getFov().getValue());
+                double ws = mc.getWindow().calculateScaleFactor(1, false);
+                double q = (mc.getWindow().getFramebufferHeight() / ws) / (2 * Math.tan(fov / 2) * d);
+                double k = size.get() / q;           // world size of one text pixel
+                double L = 64;
+                double rx = -Math.cos(anchorYaw), rz = -Math.sin(anchorYaw);
+                v1.set(tmp.x + rx * k * L, tmp.y, tmp.z + rz * k * L);
+                v2.set(tmp.x, tmp.y - k * L, tmp.z);
+                if (!NametagUtils.to2D(v1, size.get(), false) || !NametagUtils.to2D(v2, size.get(), false)) continue;
+                if (!NametagUtils.to2D(tmp, size.get(), false)) continue;
+                double mult = ls / NametagUtils.scale / L;
+                m00 = (float) ((v1.x - tmp.x) * mult);
+                m01 = (float) ((v1.y - tmp.y) * mult);
+                m10 = (float) ((v2.x - tmp.x) * mult);
+                m11 = (float) ((v2.y - tmp.y) * mult);
+            } else {
+                if (!NametagUtils.to2D(tmp, size.get() * ls)) continue;
+            }
 
             NametagUtils.begin(tmp, event.drawContext);
+            if (w3) {
+                event.drawContext.getMatrices().mul(new Matrix3x2f(m00, m01, m10, m11, 0, 0));
+                RenderSystem.getModelViewStack().mul(new Matrix4f(m00, m01, 0, 0, m10, m11, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1));
+            }
             text.beginBig();
             double total = text.getWidth(str, sh);
             double lineH = text.getHeight(sh);
