@@ -292,6 +292,7 @@ public class SkyLyrics extends Module {
             double prog;
             if (j < idx) prog = 1;
             else if (j > idx) prog = 0;
+            else if (j < 0) prog = 0;
             else {
                 long t0 = list.get(j).ms();
                 long t1 = j + 1 < list.size() ? list.get(j + 1).ms() : t0 + 4000;
