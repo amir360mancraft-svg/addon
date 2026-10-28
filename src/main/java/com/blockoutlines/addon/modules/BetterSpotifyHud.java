@@ -119,19 +119,19 @@ public class BetterSpotifyHud extends Module {
     private static BetterSpotifyHud instance;
 
     /** What is playing now, for other modules (the sky lyrics). */
-    public record Now(String title, String artist, int durationMs, boolean playing, long positionMs, boolean has) {
+    public record Now(String title, String artist, int durationMs, boolean playing, long positionMs, boolean has, int albumColor) {
     }
 
     public static Now now() {
         BetterSpotifyHud self = instance;
-        if (self == null) return new Now("", "", 0, false, 0L, false);
+        if (self == null) return new Now("", "", 0, false, 0L, false, GREEN);
         if (!self.connected && !self.connecting.get() && System.currentTimeMillis() - self.lastTry > 8000) self.tryConnect();
         synchronized (self.lock) {
-            if (self.track == null) return new Now("", "", 0, false, 0L, false);
+            if (self.track == null) return new Now("", "", 0, false, 0L, false, GREEN);
             long elapsed = self.playing ? System.currentTimeMillis() - self.lastUpdate : 0L;
             String title = self.track.getName() == null ? "" : self.track.getName();
             String artist = self.track.getArtist() == null ? "" : self.track.getArtist();
-            return new Now(title, artist, self.track.getLength(), self.playing, self.position + elapsed, true);
+            return new Now(title, artist, self.track.getLength(), self.playing, self.position + elapsed, true, self.albumColor);
         }
     }
 

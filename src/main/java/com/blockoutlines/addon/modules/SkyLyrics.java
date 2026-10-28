@@ -64,6 +64,18 @@ public class SkyLyrics extends Module {
         .defaultValue(40).range(8, 120).sliderRange(15, 80).build());
     private final Setting<SettingColor> color = sgLook.add(new ColorSetting.Builder().name("color")
         .defaultValue(new SettingColor(255, 255, 255, 255)).build());
+    private final Setting<Boolean> karaoke = sgLook.add(new BoolSetting.Builder().name("karaoke")
+        .description("Words light up one by one as they are sung.").defaultValue(true).build());
+    private final Setting<Double> unsung = sgLook.add(new DoubleSetting.Builder().name("unsung-brightness")
+        .description("How bright the words not yet sung are.").defaultValue(0.42).range(0.1, 1).sliderRange(0.2, 0.8).build());
+    private final Setting<Boolean> glow = sgLook.add(new BoolSetting.Builder().name("glow")
+        .description("A soft colored glow around the current line.").defaultValue(true).build());
+    private final Setting<Boolean> albumGlow = sgLook.add(new BoolSetting.Builder().name("glow-from-album")
+        .description("The glow takes the color of the album cover.").defaultValue(true).build());
+    private final Setting<SettingColor> glowColor = sgLook.add(new ColorSetting.Builder().name("glow-color")
+        .defaultValue(new SettingColor(120, 170, 255, 255)).visible(() -> !albumGlow.get()).build());
+    private final Setting<Boolean> sway = sgLook.add(new BoolSetting.Builder().name("float")
+        .description("The text slowly floats like it hangs in the air.").defaultValue(true).build());
     private final Setting<Boolean> shadow = sgLook.add(new BoolSetting.Builder().name("shadow").defaultValue(true).build());
 
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(8)).build();
@@ -242,30 +254,104 @@ public class SkyLyrics extends Module {
         boolean sh = shadow.get();
         SettingColor base = color.get();
         double d = distance.get();
+        int accent = albumGlow.get() ? now.albumColor() : glowColor.get().getPacked();
+        int gr = (accent >> 16) & 0xFF, gg = (accent >> 8) & 0xFF, gb = accent & 0xFF;
+        double time = nowMs / 1000.0;
+        long firstMs = list.get(0).ms();
 
-        // the first line is shown below until its time comes
         for (int j = Math.max(-1, idx - 2); j <= idx + 2; j++) {
             if (j >= list.size()) continue;
-            Line line = j < 0 ? new Line(0, "") : list.get(j);
-            if (line.text().isEmpty()) continue;
+            String str;
+            if (j < 0) {
+                if (firstMs < 2500) continue;
+                str = "\u266A \u266A \u266A";
+            } else {
+                str = list.get(j).text();
+                if (str.isEmpty()) {
+                    if (j != idx) continue;
+                    str = "\u266A \u266A \u266A";
+                }
+            }
+            boolean current = j == idx || (j < 0 && idx < 0);
             double rel = (idx - j) - 1 + s;
             double a = alphaFor(rel, showNext.get(), showPrevious.get());
             if (a <= 0.02) continue;
 
+            // how much of the line is already sung
+            double prog;
+            if (j < idx) prog = 1;
+            else if (j > idx) prog = 0;
+            else {
+                long t0 = list.get(j).ms();
+                long t1 = j + 1 < list.size() ? list.get(j + 1).ms() : t0 + 4000;
+                double dur = Math.max(600, Math.min(t1 - t0, 9000)) * 0.85;
+                prog = Math.max(0, Math.min(1, (pos - t0) / dur));
+            }
+            if (j < 0) prog = idx < 0 ? 0.0 : 1.0;
+            if (!karaoke.get()) prog = current || j < idx ? 1 : 0;
+
             double elev = Math.toRadians(height.get() - rel * gap.get());
-            double dx = -Math.sin(anchorYaw) * Math.cos(elev);
+            double yawOff = 0;
+            if (sway.get() && Math.abs(rel) < 1.6) {
+                yawOff = Math.sin(time * 0.7 + j * 0.9) * Math.toRadians(0.9);
+                elev += Math.sin(time * 0.9 + j * 1.3) * Math.toRadians(0.5);
+            }
+            double yawA = anchorYaw + yawOff;
+            double dx = -Math.sin(yawA) * Math.cos(elev);
             double dy = Math.sin(elev);
-            double dz = Math.cos(anchorYaw) * Math.cos(elev);
+            double dz = Math.cos(yawA) * Math.cos(elev);
             tmp.set(cx + dx * d, cy + dy * d, cz + dz * d);
 
             double sc = size.get() * (1.0 - 0.22 * Math.min(1.0, Math.abs(rel)));
+            // a note line pulses
+            boolean notes = str.startsWith("\u266A");
+            if (notes) sc *= 1.0 + 0.06 * Math.sin(time * 4.0);
             if (!NametagUtils.to2D(tmp, sc)) continue;
 
             NametagUtils.begin(tmp, event.drawContext);
             text.beginBig();
-            double w = text.getWidth(line.text(), sh);
-            Color c = new Color(base.r, base.g, base.b, (int) (base.a * Math.max(0, Math.min(1, a))));
-            text.render(line.text(), -w / 2.0, -text.getHeight(sh) / 2.0, c, sh);
+            double total = text.getWidth(str, sh);
+            double lineH = text.getHeight(sh);
+            double y0 = -lineH / 2.0;
+            double aClamped = Math.max(0, Math.min(1, a));
+
+            // glow: a few soft copies behind the current line
+            if (glow.get() && current && aClamped > 0.3) {
+                int ga = (int) (46 * aClamped);
+                Color gc = new Color(gr, gg, gb, ga);
+                double o = 2.6;
+                text.render(str, -total / 2.0 - o, y0, gc, false);
+                text.render(str, -total / 2.0 + o, y0, gc, false);
+                text.render(str, -total / 2.0, y0 - o, gc, false);
+                text.render(str, -total / 2.0, y0 + o, gc, false);
+            }
+
+            if (prog >= 0.999 || prog <= 0.0 || notes) {
+                double k = notes ? 1.0 : prog;
+                double bright = unsung.get() + (1 - unsung.get()) * k;
+                if (notes) bright = 0.55 + 0.45 * (0.5 + 0.5 * Math.sin(time * 4.0));
+                Color c = new Color(base.r, base.g, base.b, (int) (base.a * aClamped * bright));
+                text.render(str, -total / 2.0, y0, c, sh);
+            } else {
+                String[] words = str.split(" ");
+                int chars = 0;
+                for (String w : words) chars += w.length() + 1;
+                int acc = 0;
+                StringBuilder prefix = new StringBuilder();
+                for (String w : words) {
+                    double from = acc / (double) chars;
+                    acc += w.length() + 1;
+                    double to = acc / (double) chars;
+                    double f = ease((prog - from) / Math.max(1e-6, to - from) );
+                    double bright = unsung.get() + (1 - unsung.get()) * f;
+                    double px = -total / 2.0 + text.getWidth(prefix.toString(), sh);
+                    // words that are not sung yet sit a little lower and rise as they light up
+                    double lift = (1 - f) * lineH * 0.12;
+                    Color c = new Color(base.r, base.g, base.b, (int) (base.a * aClamped * bright));
+                    text.render(w, px, y0 + lift, c, sh);
+                    prefix.append(w).append(' ');
+                }
+            }
             text.end();
             NametagUtils.end(event.drawContext);
         }
