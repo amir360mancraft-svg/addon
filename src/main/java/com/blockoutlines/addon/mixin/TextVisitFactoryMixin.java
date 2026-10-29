@@ -1,6 +1,7 @@
 package com.blockoutlines.addon.mixin;
 
 import com.blockoutlines.addon.modules.BetterNameProtector;
+import com.blockoutlines.addon.modules.DealerLuck;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import net.minecraft.text.TextVisitFactory;
 import org.spongepowered.asm.mixin.Mixin;
@@ -16,6 +17,8 @@ public abstract class TextVisitFactoryMixin {
         Modules modules = Modules.get();
         if (modules == null) return text;
         BetterNameProtector m = modules.get(BetterNameProtector.class);
-        return m != null && m.isActive() ? m.replace(text) : text;
+        String out = m != null && m.isActive() ? m.replace(text) : text;
+        DealerLuck luck = modules.get(DealerLuck.class);
+        return luck != null && luck.isActive() ? luck.apply(out) : out;
     }
 }
