@@ -19,7 +19,7 @@
     "SwingDurationMixin",
     "ScreenBackgroundMixin",
     "TextVisitFactoryMixin",
-    "PlayerListHudMixin"
+    "CameraCinematicMixin"
   ],
   "injectors": {
     "defaultRequire": 1
