@@ -1,6 +1,8 @@
 package com.blockoutlines.addon.modules;
 
 import com.blockoutlines.addon.BlockOutlinesAddon;
+import meteordevelopment.meteorclient.events.game.GameJoinedEvent;
+import meteordevelopment.meteorclient.events.game.GameLeftEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.IntSetting;
@@ -78,6 +80,23 @@ public class DealerLuck extends Module {
         fakes.clear();
     }
 
+    private void reset() {
+        seen = new HashSet<>();
+        map.clear();
+        fakes.clear();
+        dN = pN = -1;
+    }
+
+    @EventHandler
+    private void onJoin(GameJoinedEvent event) {
+        reset();
+    }
+
+    @EventHandler
+    private void onLeave(GameLeftEvent event) {
+        reset();
+    }
+
     @EventHandler
     private void onTick(TickEvent.Pre event) {
         if (mc.world == null) return;
@@ -113,10 +132,7 @@ public class DealerLuck extends Module {
             resolve(dN, pN);
             dN = pN = -1;
         }
-        if (!map.isEmpty() && tick > expireTick) {
-            map.clear();
-            fakes.clear();
-        }
+        if (!map.isEmpty() && tick > expireTick) map.clear();
         if (!fakes.isEmpty() && mc.currentScreen instanceof HandledScreen<?>) fixContainer();
     }
 
@@ -151,7 +167,7 @@ public class DealerLuck extends Module {
     private void fixContainer() {
         if (mc.player == null) return;
         ScreenHandler handler = mc.player.currentScreenHandler;
-        if (handler == null || handler.slots.size() < 9) return;
+        if (handler == null || handler.slots.size() != 45) return;
         for (Fake f : fakes) {
             int from = -1;
             int empty = -1, emptyCount = 0;
