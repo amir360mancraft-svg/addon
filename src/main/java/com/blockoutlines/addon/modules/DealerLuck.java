@@ -10,10 +10,18 @@ import meteordevelopment.meteorclient.settings.StringSetting;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.entity.Entity;
+import net.minecraft.client.gui.screen.ingame.HandledScreen;
+import net.minecraft.component.DataComponentTypes;
 import net.minecraft.entity.ItemEntity;
+import net.minecraft.item.ItemStack;
+import net.minecraft.screen.ScreenHandler;
+import net.minecraft.screen.slot.Slot;
+import net.minecraft.text.Text;
 
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
@@ -38,6 +46,10 @@ public class DealerLuck extends Module {
     private final Setting<Boolean> inScreens = sg.add(new BoolSetting.Builder().name("change-in-menus")
         .description("Also change the numbers in inventories and tooltips. Off = menus always show the real names.").defaultValue(false).build());
 
+    private record Fake(String prefix, int real, int shown) {
+    }
+
+    private final List<Fake> fakes = new ArrayList<>();
     private final Random random = new Random();
     private Set<Integer> seen = new HashSet<>();
     private final Map<String, String> map = new HashMap<>();
@@ -53,12 +65,14 @@ public class DealerLuck extends Module {
     public void onActivate() {
         seen = new HashSet<>();
         map.clear();
+        fakes.clear();
         dN = pN = -1;
     }
 
     @Override
     public void onDeactivate() {
         map.clear();
+        fakes.clear();
     }
 
     @EventHandler
@@ -95,11 +109,16 @@ public class DealerLuck extends Module {
             resolve(dN, pN);
             dN = pN = -1;
         }
-        if (!map.isEmpty() && tick > expireTick) map.clear();
+        if (!map.isEmpty() && tick > expireTick) {
+            map.clear();
+            fakes.clear();
+        }
+        if (!fakes.isEmpty() && mc.currentScreen instanceof HandledScreen<?>) fixContainer();
     }
 
     private void resolve(int d, int p) {
         map.clear();
+        fakes.clear();
         if (d > p) return;   // the dealer really won, nothing to change
         int max = maxNumber.get();
         int d2 = d, p2 = p;
@@ -112,6 +131,38 @@ public class DealerLuck extends Module {
         map.put(dealerName.get() + " " + d, dealerName.get() + " " + d2);
         map.put(playerName.get() + " " + p, playerName.get() + " " + p2);
         expireTick = tick + showSeconds.get() * 20;
+        if (d2 != d) fakes.add(new Fake(dealerName.get(), d, d2));
+        if (p2 != p) fakes.add(new Fake(playerName.get(), p, p2));
+    }
+
+    /**
+     * Makes an opened dispenser agree with the shown numbers: the item that "was taken" (the shown number) disappears
+     * from its slot, and the slot that really is empty is filled with the item of the real number.
+     */
+    private void fixContainer() {
+        if (mc.player == null) return;
+        ScreenHandler handler = mc.player.currentScreenHandler;
+        if (handler == null || handler.slots.size() < 9) return;
+        for (Fake f : fakes) {
+            int from = -1;
+            int empty = -1, emptyCount = 0;
+            for (int i = 0; i < 9; i++) {
+                ItemStack st = handler.slots.get(i).getStack();
+                if (st.isEmpty()) {
+                    empty = i;
+                    emptyCount++;
+                } else if (st.getName().getString().equals(f.prefix() + " " + f.shown())) {
+                    from = i;
+                }
+            }
+            if (from < 0 || emptyCount != 1) continue;
+            Slot src = handler.slots.get(from);
+            Slot dst = handler.slots.get(empty);
+            ItemStack moved = src.getStack().copy();
+            moved.set(DataComponentTypes.CUSTOM_NAME, Text.literal(f.prefix() + " " + f.real()));
+            src.setStack(ItemStack.EMPTY);
+            dst.setStack(moved);
+        }
     }
 
     /** Called for every string drawn on screen (see TextVisitFactoryMixin). */
