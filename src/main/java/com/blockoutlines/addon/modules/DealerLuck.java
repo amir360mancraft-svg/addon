@@ -99,14 +99,25 @@ public class DealerLuck extends Module {
 
     @EventHandler
     private void onTick(TickEvent.Pre event) {
+        try {
+            tickInner();
+        } catch (Throwable t) {
+            // never let this module break the game; say what happened instead
+            if (debug.get()) error("problem: " + t);
+        }
+    }
+
+    private void tickInner() {
         if (mc.world == null) return;
         tick++;
         Pattern dp = Pattern.compile("^" + Pattern.quote(dealerName.get()) + " (\\d+)$");
         Pattern pp = Pattern.compile("^" + Pattern.quote(playerName.get()) + " (\\d+)$");
 
         Set<Integer> now = new HashSet<>();
+        int itemCount = 0;
         for (Entity e : mc.world.getEntities()) {
             if (!(e instanceof ItemEntity item)) continue;
+            itemCount++;
             now.add(e.getId());
             if (seen.contains(e.getId())) continue;
             String name = item.getStack().getName().getString();
@@ -124,6 +135,7 @@ public class DealerLuck extends Module {
             }
         }
         seen = now;
+        if (debug.get() && tick % 100 == 0) info("alive: " + itemCount + " item(s) in the world, fakes " + fakes.size());
 
         // the two items of one round drop at almost the same time
         if (dN > 0 && tick - dTick > 80) dN = -1;
@@ -160,14 +172,41 @@ public class DealerLuck extends Module {
         if (p2 != p) fakes.add(new Fake(playerName.get(), p, p2));
     }
 
+    // what we changed in the open dispenser, so we can put it back when the server touches the slot
+    private ScreenHandler appliedHandler;
+    private ItemStack appliedCopy, appliedOriginal;
+    private int appliedFrom = -1, appliedTo = -1;
+
     /**
      * Makes an opened dispenser agree with the shown numbers: the item that "was taken" (the shown number) disappears
-     * from its slot, and the slot that really is empty is filled with the item of the real number.
+     * from its slot, and the slot that really is empty is filled with the item of the real number. When you then put
+     * the item back (the server fills the really empty slot), the hole we made is filled again, so the dispenser
+     * looks full the way it should.
      */
     private void fixContainer() {
         if (mc.player == null) return;
         ScreenHandler handler = mc.player.currentScreenHandler;
         if (handler == null || handler.slots.size() != 45) return;
+
+        if (appliedHandler != handler) {
+            appliedHandler = handler;
+            appliedCopy = null;
+            appliedOriginal = null;
+            appliedFrom = appliedTo = -1;
+        }
+
+        if (appliedCopy != null) {
+            // the server changed the slot we filled (you put the item back): show the real, full dispenser
+            if (handler.slots.get(appliedTo).getStack() != appliedCopy) {
+                handler.slots.get(appliedFrom).setStack(appliedOriginal);
+                appliedCopy = null;
+                appliedOriginal = null;
+                appliedFrom = appliedTo = -1;
+                fakes.clear();
+            }
+            return;
+        }
+
         for (Fake f : fakes) {
             int from = -1;
             int empty = -1, emptyCount = 0;
@@ -183,10 +222,16 @@ public class DealerLuck extends Module {
             if (from < 0 || emptyCount != 1) continue;
             Slot src = handler.slots.get(from);
             Slot dst = handler.slots.get(empty);
-            ItemStack moved = src.getStack().copy();
+            ItemStack original = src.getStack();
+            ItemStack moved = original.copy();
             moved.set(DataComponentTypes.CUSTOM_NAME, Text.literal(f.prefix() + " " + f.real()));
             src.setStack(ItemStack.EMPTY);
             dst.setStack(moved);
+            appliedCopy = moved;
+            appliedOriginal = original;
+            appliedFrom = from;
+            appliedTo = empty;
+            return;
         }
     }
 
