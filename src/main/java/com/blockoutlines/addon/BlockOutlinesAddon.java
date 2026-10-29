@@ -10,7 +10,6 @@ import com.blockoutlines.addon.modules.BetterSpotifyHud;
 import com.blockoutlines.addon.modules.SkyLyrics;
 import com.blockoutlines.addon.modules.ConcertMode;
 import com.blockoutlines.addon.modules.DealerLuck;
-import com.blockoutlines.addon.modules.GambleTracker;
 import com.blockoutlines.addon.modules.GambleGames;
 import com.blockoutlines.addon.modules.CinematicCamera;
 import com.blockoutlines.addon.modules.BlockOutlines;
@@ -132,7 +131,6 @@ public class BlockOutlinesAddon extends MeteorAddon {
         Modules.get().add(new ConcertMode());
         Modules.get().add(new CinematicCamera());
         Modules.get().add(new DealerLuck());
-        Modules.get().add(new GambleTracker());
         Modules.get().add(new GambleGames());
         Modules.get().add(new SwingSpeed());
         Modules.get().add(new MenuBackground());
