@@ -31,15 +31,13 @@ import java.util.regex.Pattern;
  */
 public class GambleGames extends Module {
     public enum Game { CoinFlip, HigherNumber }
+    public enum Side { Heads, Tails }
 
     private static final Pattern INCOMING = Pattern.compile("(?i)(\\w{1,16})\\s+paid\\s+you\\s+\\$?\\s*([0-9][0-9,.]*\\s*[kmbt]?)(?![a-z])");
-    private static final Pattern SIDE = Pattern.compile("(?i)\\b(heads?|tails?)\\b");
 
     private static final class Bet {
         String player;
-        long amount, born;
-        int side = -1;          // coin flip: 0 heads, 1 tails
-        boolean done;
+        long amount;
     }
 
     private static final class Owed {
@@ -55,11 +53,8 @@ public class GambleGames extends Module {
     }
 
     private final SecureRandom rng = new SecureRandom();
-    private final List<Bet> bets = new ArrayList<>();
     private final List<Owed> owed = new ArrayList<>();
     private final List<Line> log = new ArrayList<>();
-    private final List<long[]> chatTimes = new ArrayList<>();
-    private final List<String> chatLines = new ArrayList<>();
     private String lastKey = "";
     private long lastKeyMs, lastPayMs;
 
@@ -67,7 +62,7 @@ public class GambleGames extends Module {
     private final SettingGroup sgHud = settings.createGroup("Screen");
 
     private final Setting<Game> game = sg.add(new EnumSetting.Builder<Game>().name("game")
-        .description("CoinFlip: the player says heads or tails in chat. HigherNumber: two numbers 1-9, the higher one wins, a tie gives the money back.")
+        .description("CoinFlip: the player is always on one side, you on the other. HigherNumber: two numbers 1-9, the higher one wins, a tie gives the money back.")
         .defaultValue(Game.CoinFlip).build());
     private final Setting<Keybind> payKey = sg.add(new KeybindSetting.Builder().name("pay-key")
         .description("Sends /pay for the first line in the owed list.").defaultValue(Keybind.none()).action(this::payNext).build());
@@ -75,8 +70,10 @@ public class GambleGames extends Module {
         .description("What the winner gets back, 2.0 = double.").defaultValue(2.0).range(1.0, 3.0).sliderRange(1.5, 2.5).build());
     private final Setting<Integer> maxBetK = sg.add(new IntSetting.Builder().name("max-bet-k")
         .description("Bets above this (in thousands) are not played, they go on the list as 'refund'. 0 = no limit.").defaultValue(0).min(0).sliderMax(5000).build());
-    private final Setting<Integer> waitSec = sg.add(new IntSetting.Builder().name("wait-for-choice-seconds")
-        .description("How long a bet waits for heads/tails before it is put on the refund list.").defaultValue(60).range(10, 300).sliderRange(20, 120).build());
+    private final Setting<Side> playerSide = sg.add(new EnumSetting.Builder<Side>().name("player-side")
+        .description("CoinFlip: the side the player always gets. You get the other one. It is 50/50 either way.").defaultValue(Side.Tails).build());
+    private final Setting<Keybind> testKey = sg.add(new KeybindSetting.Builder().name("test-key")
+        .description("Pretends that 'TestPlayer' paid you 1K, to try the module alone. Nothing real is sent for it.").defaultValue(Keybind.none()).action(() -> newBet("TestPlayer", 1000)).build());
     private final Setting<Boolean> reply = sg.add(new BoolSetting.Builder().name("tell-player")
         .description("Also send the result to the player with /msg.").defaultValue(false).build());
 
@@ -85,11 +82,6 @@ public class GambleGames extends Module {
 
     public GambleGames() {
         super(BlockOutlinesAddon.CATEGORY, "gamble-games", "Fair coin flip / higher-number games for when you host. You press the key to pay winners.");
-    }
-
-    @Override
-    public void onActivate() {
-        bets.clear();
     }
 
     private void say(String s, int color) {
@@ -124,14 +116,6 @@ public class GambleGames extends Module {
             return;
         }
 
-        chatLines.add(text);
-        chatTimes.add(new long[]{now});
-        while (chatLines.size() > 60) {
-            chatLines.remove(0);
-            chatTimes.remove(0);
-        }
-        if (game.get() == Game.CoinFlip) for (Bet b : new ArrayList<>(bets)) if (!b.done && b.side < 0) pickSide(b);
-        sweep();
     }
 
     private void newBet(String who, long amt) {
@@ -144,56 +128,14 @@ public class GambleGames extends Module {
         Bet b = new Bet();
         b.player = who;
         b.amount = amt;
-        b.born = System.currentTimeMillis();
-        if (game.get() == Game.HigherNumber) {
-            play(b);
-            return;
-        }
-        bets.add(b);
-        pickSide(b);
-        if (!b.done && b.side < 0) {
-            say(who + " paid " + Money.pretty(amt) + " - waiting for heads/tails", 0xFFB8B8C8);
-            tell(who, "got your " + Money.pretty(amt) + ", say heads or tails");
-        }
-    }
-
-    /** Look in the recent chat for a line from this player that says heads or tails. */
-    private void pickSide(Bet b) {
-        Pattern name = Pattern.compile("(?i)\\b" + Pattern.quote(b.player) + "\\b");
-        for (int i = chatLines.size() - 1; i >= 0; i--) {
-            if (b.born - chatTimes.get(i)[0] > 120_000) break;
-            String line = chatLines.get(i);
-            if (!name.matcher(line).find()) continue;
-            Matcher s = SIDE.matcher(line);
-            if (s.find()) {
-                b.side = s.group(1).toLowerCase().startsWith("h") ? 0 : 1;
-                play(b);
-                return;
-            }
-        }
-    }
-
-    private void sweep() {
-        long now = System.currentTimeMillis();
-        for (Bet b : new ArrayList<>(bets)) {
-            if (b.done) {
-                bets.remove(b);
-            } else if (now - b.born > waitSec.get() * 1000L) {
-                b.done = true;
-                bets.remove(b);
-                addOwed(b.player, b.amount, true);
-                say(b.player + " never chose - refund " + Money.pretty(b.amount), 0xFFFFC857);
-            }
-        }
+        play(b);
     }
 
     private void play(Bet b) {
-        b.done = true;
-        bets.remove(b);
         long win = Math.round(b.amount * multiplier.get());
         if (game.get() == Game.CoinFlip) {
             int result = rng.nextInt(2);
-            boolean won = result == b.side;
+            boolean won = result == (playerSide.get() == Side.Heads ? 0 : 1);
             String face = result == 0 ? "heads" : "tails";
             if (won) {
                 addOwed(b.player, win, false);
@@ -235,6 +177,10 @@ public class GambleGames extends Module {
         if (now - lastPayMs < 1500) return;
         lastPayMs = now;
         Owed o = owed.remove(0);
+        if (o.player.equals("TestPlayer")) {
+            say("(test) would send /pay TestPlayer " + Money.pretty(o.amount), 0xFFB8B8C8);
+            return;
+        }
         ChatUtils.sendPlayerMsg("/pay " + o.player + " " + o.amount);
         say("sent /pay " + o.player + " " + Money.pretty(o.amount), 0xFFB8B8C8);
     }
@@ -242,18 +188,13 @@ public class GambleGames extends Module {
     @EventHandler
     private void onRender2D(Render2DEvent event) {
         if (mc.getWindow() == null || mc.options.hudHidden) return;
-        sweep();
         DrawContext ctx = event.drawContext;
         int x = hx.get(), y = hy.get();
         int w = 260;
-        int rows = 1 + owed.size() + (owed.isEmpty() ? 0 : 1) + log.size() + bets.size();
+        int rows = 1 + owed.size() + (owed.isEmpty() ? 0 : 1) + log.size();
         ctx.fill(x, y, x + w, y + 6 + rows * 11, 0xB0151520);
         ctx.drawTextWithShadow(mc.textRenderer, "Gamble games - " + game.get(), x + 4, y + 4, 0xFFFFFFFF);
         int ty = y + 15;
-        for (Bet b : bets) {
-            ctx.drawTextWithShadow(mc.textRenderer, "waiting: " + b.player + " " + Money.pretty(b.amount), x + 4, ty, 0xFFB8B8C8);
-            ty += 11;
-        }
         if (!owed.isEmpty()) {
             ctx.drawTextWithShadow(mc.textRenderer, "You owe (pay-key sends the first):", x + 4, ty, 0xFFFFC857);
             ty += 11;
