@@ -61,7 +61,7 @@ hud|q -0.95 -0.8 1.9 1.6 f|q -0.8 -0.65 1.6 1.3 b|c -0.45 -0.2 0.6 f|q -0.05 -0.
         {"sus-chunk", "eye"}, {"base-finder", "house"}, {"better-region-map", "grid"}, {"animated-sky", "cloud"},
         {"starry-sky", "sparkle"}, {"armor-trim-changer", "shield"}, {"auto-trident", "trident"}, {"better-admin-hud", "person"},
         {"better-outline", "cube"}, {"china-hat", "cone"}, {"color-grading", "palette"}, {"custom-cape", "cape"},
-        {"custom-crosshair", "crosshair"}, {"target-marker", "crosshair"}, {"custom-glint", "sparkle"}, {"death-echo", "ghost"}, {"sky-lyrics", "cloud"}, {"concert-mode", "sparkle"}, {"dealer-luck", "gem"}, {"cinematic-camera", "eye"},
+        {"custom-crosshair", "crosshair"}, {"target-marker", "crosshair"}, {"custom-glint", "sparkle"}, {"death-echo", "ghost"}, {"sky-lyrics", "cloud"}, {"concert-mode", "sparkle"}, {"dealer-luck", "gem"}, {"gamble-tracker", "grid"}, {"gamble-games", "gem"}, {"cinematic-camera", "eye"},
         {"dynamic-island", "pill"}, {"fake-elytra", "wings"}, {"wings", "wings"}, {"hit-effect", "burst"},
         {"kill-effect", "bolt"}, {"item-counter-hud", "box"}, {"item-drop-physics", "box"}, {"jump-circle", "ring"},
         {"menu-background", "picture"}, {"no-water", "nodrop"}, {"pets", "paw"}, {"player-signs", "sign"},
