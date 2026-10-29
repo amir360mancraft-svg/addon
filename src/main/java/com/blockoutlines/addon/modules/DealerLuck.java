@@ -50,6 +50,9 @@ public class DealerLuck extends Module {
     }
 
     private final List<Fake> fakes = new ArrayList<>();
+    private final Setting<Boolean> debug = sg.add(new BoolSetting.Builder().name("debug")
+        .description("Prints in chat the names of items that drop and what the module decided. Use it to find out why nothing changes.").defaultValue(false).build());
+
     private final Random random = new Random();
     private Set<Integer> seen = new HashSet<>();
     private final Map<String, String> map = new HashMap<>();
@@ -88,6 +91,7 @@ public class DealerLuck extends Module {
             now.add(e.getId());
             if (seen.contains(e.getId())) continue;
             String name = item.getStack().getName().getString();
+            if (debug.get()) info("item dropped: '" + name + "'");
             Matcher dm = dp.matcher(name);
             if (dm.matches()) {
                 dN = Integer.parseInt(dm.group(1));
@@ -117,9 +121,13 @@ public class DealerLuck extends Module {
     }
 
     private void resolve(int d, int p) {
+        if (debug.get()) info("round: dealer " + d + ", player " + p);
         map.clear();
         fakes.clear();
-        if (d > p) return;   // the dealer really won, nothing to change
+        if (d > p) {   // the dealer really won, nothing to change
+            if (debug.get()) info("dealer really won, nothing changed");
+            return;
+        }
         int max = maxNumber.get();
         int d2 = d, p2 = p;
         if (p < max) {
@@ -131,6 +139,7 @@ public class DealerLuck extends Module {
         map.put(dealerName.get() + " " + d, dealerName.get() + " " + d2);
         map.put(playerName.get() + " " + p, playerName.get() + " " + p2);
         expireTick = tick + showSeconds.get() * 20;
+        if (debug.get()) info("showing dealer " + d2 + ", player " + p2);
         if (d2 != d) fakes.add(new Fake(dealerName.get(), d, d2));
         if (p2 != p) fakes.add(new Fake(playerName.get(), p, p2));
     }
