@@ -11,7 +11,7 @@ public final class Sfx {
 
     private static void play(SoundEvent e, float pitch, float volume) {
         try {
-            MinecraftClient.getInstance().getSoundManager().play(PositionedSoundInstance.ui(e, pitch, volume));
+            MinecraftClient.getInstance().getSoundManager().play(PositionedSoundInstance.master(e, pitch, volume));
         } catch (Throwable ignored) {
         }
     }
