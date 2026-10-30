@@ -25,6 +25,7 @@ public class WheelEditorScreen extends Screen {
     private TextFieldWidget nameField, cmdField;
     private boolean updating;
     private int listX, listY, rightX, iconY, previewX;
+    private int rowH = 22;
 
     public WheelEditorScreen(CommandWheel module) {
         super(Text.literal("Command wheel"));
@@ -35,15 +36,18 @@ public class WheelEditorScreen extends Screen {
     protected void init() {
         int total = 160 + 14 + COLS * CELL;
         int left = Math.max(6, (width - total) / 2);
-        int top = Math.max(12, (height - 250) / 2);
+        // the list has 12 rows and 2 rows of buttons under it: make sure all of it is on the screen
+        rowH = Math.max(15, Math.min(22, (height - 62 - 4) / 12));
+        int need = 62 + 12 * rowH;
+        int top = Math.max(4, Math.min((height - 250) / 2, height - need));
         listX = left;
         listY = top + 14;
         rightX = left + 174;
 
-        addDrawableChild(ButtonWidget.builder(Text.literal("+ Add"), b -> add()).dimensions(listX, listY + 12 * 22 + 4, 76, 18).build());
-        addDrawableChild(ButtonWidget.builder(Text.literal("Delete"), b -> remove()).dimensions(listX + 80, listY + 12 * 22 + 4, 76, 18).build());
-        addDrawableChild(ButtonWidget.builder(Text.literal("Up"), b -> move(-1)).dimensions(listX, listY + 12 * 22 + 24, 76, 18).build());
-        addDrawableChild(ButtonWidget.builder(Text.literal("Down"), b -> move(1)).dimensions(listX + 80, listY + 12 * 22 + 24, 76, 18).build());
+        addDrawableChild(ButtonWidget.builder(Text.literal("+ Add"), b -> add()).dimensions(listX, listY + 12 * rowH + 4, 76, 18).build());
+        addDrawableChild(ButtonWidget.builder(Text.literal("Delete"), b -> remove()).dimensions(listX + 80, listY + 12 * rowH + 4, 76, 18).build());
+        addDrawableChild(ButtonWidget.builder(Text.literal("Up"), b -> move(-1)).dimensions(listX, listY + 12 * rowH + 24, 76, 18).build());
+        addDrawableChild(ButtonWidget.builder(Text.literal("Down"), b -> move(1)).dimensions(listX + 80, listY + 12 * rowH + 24, 76, 18).build());
 
         nameField = new TextFieldWidget(textRenderer, rightX, top + 24, COLS * CELL, 18, Text.literal("Name"));
         nameField.setMaxLength(16);
@@ -161,8 +165,8 @@ public class WheelEditorScreen extends Screen {
         // list
         List<CommandWheel.Item> l = module.items();
         for (int i = 0; i < l.size(); i++) {
-            int y = listY + i * 22;
-            if (mx >= listX && mx < listX + 156 && my >= y && my < y + 20) {
+            int y = listY + i * rowH;
+            if (mx >= listX && mx < listX + 156 && my >= y && my < y + rowH - 2) {
                 sel = i;
                 refreshFields();
                 return true;
@@ -192,11 +196,11 @@ public class WheelEditorScreen extends Screen {
 
         List<CommandWheel.Item> l = module.items();
         for (int i = 0; i < l.size(); i++) {
-            int y = listY + i * 22;
+            int y = listY + i * rowH;
             CommandWheel.Item it = l.get(i);
-            ctx.fill(listX, y, listX + 156, y + 20, i == sel ? 0xFF4A4A62 : 0xFF2C2C3A);
-            WheelIcons.draw(ctx, it.kind, it.value, listX + 11, y + 10, 16);
-            ctx.drawTextWithShadow(textRenderer, it.label, listX + 24, y + 6, 0xFFFFFFFF);
+            ctx.fill(listX, y, listX + 156, y + rowH - 2, i == sel ? 0xFF4A4A62 : 0xFF2C2C3A);
+            WheelIcons.draw(ctx, it.kind, it.value, listX + 11, y + (rowH - 2) / 2, 16);
+            ctx.drawTextWithShadow(textRenderer, it.label, listX + 24, y + (rowH - 2 - 8) / 2 + 1, 0xFFFFFFFF);
         }
 
         ctx.drawTextWithShadow(textRenderer, "Name", rightX, top + 14, 0xFFB8B8C8);
