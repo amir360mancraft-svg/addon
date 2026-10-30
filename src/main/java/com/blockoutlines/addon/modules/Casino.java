@@ -5,6 +5,7 @@ import com.blockoutlines.addon.gui.CasinoScreen;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import meteordevelopment.meteorclient.settings.BoolSetting;
+import meteordevelopment.meteorclient.settings.IntSetting;
 import meteordevelopment.meteorclient.settings.KeybindSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
@@ -37,6 +38,19 @@ public class Casino extends Module {
 
     private final Setting<Boolean> unlimited = sg.add(new BoolSetting.Builder().name("unlimited-chips")
         .description("You can bet any amount, even more than your chips (the chips can go below zero). Just for fun.").defaultValue(true).build());
+
+    private final Setting<Integer> greenPockets = sg.add(new IntSetting.Builder().name("roulette-green-pockets")
+        .description("How many green pockets the roulette has next to its 12 red and 12 black ones (more green = green wins more often).").defaultValue(3).range(1, 8).sliderRange(1, 6).build());
+    private final Setting<Integer> greenPayout = sg.add(new IntSetting.Builder().name("roulette-green-payout")
+        .description("What green pays (red and black always pay 2x).").defaultValue(4).range(2, 36).sliderRange(2, 14).build());
+
+    public int greenPockets() {
+        return greenPockets.get();
+    }
+
+    public int greenPayout() {
+        return greenPayout.get();
+    }
 
     public boolean unlimited() {
         return unlimited.get();

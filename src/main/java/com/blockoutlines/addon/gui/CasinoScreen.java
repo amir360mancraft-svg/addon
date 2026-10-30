@@ -3,6 +3,8 @@ package com.blockoutlines.addon.gui;
 import com.blockoutlines.addon.casino.BaccaratGame;
 import com.blockoutlines.addon.casino.BlackjackGame;
 import com.blockoutlines.addon.casino.CoinFlipGame;
+import com.blockoutlines.addon.casino.CrashGame;
+import com.blockoutlines.addon.casino.RouletteGame;
 import com.blockoutlines.addon.casino.Game;
 import com.blockoutlines.addon.casino.MinesGame;
 import com.blockoutlines.addon.casino.UI;
@@ -40,6 +42,8 @@ public class CasinoScreen extends Screen {
         games.add(new BaccaratGame(casino));
         games.add(new CoinFlipGame(casino));
         games.add(new MinesGame(casino));
+        games.add(new RouletteGame(casino));
+        games.add(new CrashGame(casino));
         for (Game g : games) tabs.add(new UI.Btn(g.name(), UI.PANEL2));
     }
 
@@ -148,6 +152,8 @@ public class CasinoScreen extends Screen {
             case 0 -> UI.stack(Items.PAPER);
             case 1 -> UI.stack(Items.BOOK);
             case 2 -> UI.stack(Items.GOLD_INGOT);
+            case 4 -> UI.stack(Items.RED_DYE);
+            case 5 -> UI.stack(Items.FIREWORK_ROCKET);
             default -> UI.tnt();
         };
     }
