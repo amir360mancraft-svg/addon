@@ -1,39 +1,56 @@
 package com.blockoutlines.addon.util;
 
-public class Money {
-    /** Parses things like "500", "1,000", "2.5k", "3m", "1b", "1t" into a long. Returns 0 if it can't be read. */
-    public static long parse(String s) {
-        if (s == null) return 0;
-        s = s.trim().toLowerCase().replace(",", "").replace("$", "").replace(" ", "");
-        if (s.isEmpty()) return 0;
-        double mult = 1;
-        char last = s.charAt(s.length() - 1);
+import java.util.Locale;
+
+/** Amounts of money the way the server writes them: 1,500 / 2.5K / 3M / 1.2B / 4T. */
+public final class Money {
+    private Money() {
+    }
+
+    /** Parses an amount. Returns -1 when the text is not a number. */
+    public static long parse(String text) {
+        if (text == null) return -1;
+        String s = text.replaceAll("[,\\s$]", "");
+        if (s.isEmpty()) return -1;
+        char last = Character.toLowerCase(s.charAt(s.length() - 1));
+        double mul = 1;
         switch (last) {
-            case 'k': mult = 1_000d; break;
-            case 'm': mult = 1_000_000d; break;
-            case 'b': mult = 1_000_000_000d; break;
-            case 't': mult = 1_000_000_000_000d; break;
-            default: break;
+            case 'k' -> mul = 1e3;
+            case 'm' -> mul = 1e6;
+            case 'b' -> mul = 1e9;
+            case 't' -> mul = 1e12;
+            default -> {
+            }
         }
-        if (mult != 1) s = s.substring(0, s.length() - 1);
+        if (mul > 1) s = s.substring(0, s.length() - 1);
         try {
-            return (long) (Double.parseDouble(s) * mult);
+            double v = Double.parseDouble(s);
+            if (Double.isNaN(v) || Double.isInfinite(v) || v < 0) return -1;
+            return Math.round(v * mul);
         } catch (NumberFormatException e) {
-            return 0;
+            return -1;
         }
     }
 
-    public static String pretty(long v) {
-        if (v >= 1_000_000_000_000L) return trim(v / 1_000_000_000_000.0) + "T";
-        if (v >= 1_000_000_000L) return trim(v / 1_000_000_000.0) + "B";
-        if (v >= 1_000_000L) return trim(v / 1_000_000.0) + "M";
-        if (v >= 1_000L) return trim(v / 1_000.0) + "K";
-        return String.valueOf(v);
+    private static String trim(double v) {
+        String s = String.format(Locale.ROOT, "%.2f", v);
+        if (s.contains(".")) s = s.replaceAll("0+$", "").replaceAll("\\.$", "");
+        return s;
     }
 
-    private static String trim(double d) {
-        if (d == Math.floor(d)) return String.valueOf((long) d);
-        String s = String.format(java.util.Locale.ROOT, "%.2f", d);
-        return s.replaceAll("0+$", "").replaceAll("\\.$", "");
+    /** 1500 -> 1.5K, 2000000 -> 2M ... */
+    public static String pretty(long v) {
+        long a = Math.abs(v);
+        String sign = v < 0 ? "-" : "";
+        if (a >= 1_000_000_000_000L) return sign + trim(a / 1e12) + "T";
+        if (a >= 1_000_000_000L) return sign + trim(a / 1e9) + "B";
+        if (a >= 1_000_000L) return sign + trim(a / 1e6) + "M";
+        if (a >= 1_000L) return sign + trim(a / 1e3) + "K";
+        return sign + a;
+    }
+
+    /** Like pretty, but with a + in front of gains. */
+    public static String signed(long v) {
+        return (v > 0 ? "+" : "") + pretty(v);
     }
 }
