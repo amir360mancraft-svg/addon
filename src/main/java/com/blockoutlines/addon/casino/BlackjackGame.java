@@ -15,6 +15,8 @@ public class BlackjackGame extends Game {
     private Phase phase = Phase.IDLE;
     private long staked;
     private float deckX, deckY;
+    private int resultCol;
+    private long resultAt = -10000;
 
     private final UI.Btn deal = new UI.Btn("DEAL", UI.ACCENT), hit = new UI.Btn("Hit", UI.GOOD),
         stand = new UI.Btn("Stand", UI.BAD), dbl = new UI.Btn("Double", UI.GOLD);
@@ -52,6 +54,7 @@ public class BlackjackGame extends Game {
 
     private void give(List<Cards.Card> hand, boolean up) {
         hand.add(new Cards.Card(shoe.draw(), now(), up, deckX, deckY));
+        Sfx.card();
     }
 
     private void start() {
@@ -74,6 +77,7 @@ public class BlackjackGame extends Game {
     }
 
     private void revealHole() {
+        for (Cards.Card k : dealer) if (!k.faceUp) Sfx.flip();
         for (Cards.Card k : dealer) k.reveal(now());
     }
 
@@ -100,6 +104,9 @@ public class BlackjackGame extends Game {
         else if (p > d) finish(staked, staked * 2, "You win");
         else if (p == d) finish(staked, staked, "Push");
         else finish(staked, 0, "Dealer wins");
+        int net = p > 21 ? -1 : (pbj && !dbj) ? 1 : d > 21 ? 1 : p > d ? 1 : p == d ? 0 : -1;
+        resultCol = net > 0 ? UI.GOOD : (net < 0 ? UI.BAD : UI.GOLD);
+        resultAt = now();
         phase = Phase.DONE;
     }
 
@@ -129,6 +136,8 @@ public class BlackjackGame extends Game {
         drawHand(c, dealer, cx, y + 24, now);
         UI.text(c, "You" + (player.isEmpty() ? "" : "  " + total(player, false)), x + 10, y + 118, UI.TEXT);
         drawHand(c, player, cx, y + 134, now);
+        UI.glow(c, cx - 118, y + 126, 236, Cards.H + 16, resultCol, resultAt);
+        drawBetPile(c, x + 62, y + h - 52 - 62, busy() ? staked : bet);
         UI.center(c, "Blackjack pays 3:2  -  dealer stands on 17", cx, y + h - 52 - 14, UI.alpha(UI.TEXT, 0.55f));
 
         int by = y + h - 52 - 36;

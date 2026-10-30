@@ -14,6 +14,9 @@ public class BaccaratGame extends Game {
     private int pick = 0;            // 0 player, 1 banker, 2 tie
     private long staked;
     private float deckX, deckY;
+    private final List<Integer> hist = new ArrayList<>();
+    private int lastWinner = -1;
+    private long winAt = -10000;
 
     private final UI.Btn bp = new UI.Btn("Player 2x", UI.PANEL2), bb = new UI.Btn("Banker 1.95x", UI.PANEL2),
         bt = new UI.Btn("Tie 9x", UI.PANEL2), deal = new UI.Btn("DEAL", UI.ACCENT);
@@ -45,6 +48,7 @@ public class BaccaratGame extends Game {
 
     private void give(List<Cards.Card> hand) {
         hand.add(new Cards.Card(shoe.draw(), now(), true, deckX, deckY));
+        Sfx.card();
     }
 
     private void start() {
@@ -99,6 +103,10 @@ public class BaccaratGame extends Game {
         else if (winner == 2) back = staked;                         // tie: Player and Banker bets are returned
         else if (pick == winner) back = pick == 0 ? staked * 2 : staked * 195 / 100;
         else back = 0;
+        hist.add(winner);
+        if (hist.size() > 12) hist.remove(0);
+        lastWinner = winner;
+        winAt = now();
         running = false;
         finished = true;
         finish(staked, back, title);
@@ -121,6 +129,16 @@ public class BaccaratGame extends Game {
         UI.center(c, "PLAYER" + shown(player, now), px, y + 80, pick == 0 ? UI.GOLD : UI.TEXT);
         UI.center(c, "BANKER" + shown(banker, now), bxx, y + 80, pick == 1 ? UI.GOLD : UI.TEXT);
         if (pick == 2) UI.center(c, "TIE", cx, y + 80, UI.GOLD);
+        if (lastWinner == 0 || lastWinner == 2) UI.glow(c, px - 100, zy, 200, zh, lastWinner == 2 ? UI.GOLD : UI.GOOD, winAt);
+        if (lastWinner == 1 || lastWinner == 2) UI.glow(c, bxx - 100, zy, 200, zh, lastWinner == 2 ? UI.GOLD : UI.GOOD, winAt);
+        // the last results: P blue, B red, T green
+        for (int i = 0; i < hist.size(); i++) {
+            int wv = hist.get(i);
+            int hx = x + 22 + i * 15, hy = y + 20;
+            UI.ellipse(c, hx, hy, 6, 6, wv == 0 ? 0xFF3F6BE0 : wv == 1 ? 0xFFD94A4A : 0xFF2EBF5E);
+            UI.plain(c, hx, hy + 0.5f, 0.6f, wv == 0 ? "P" : wv == 1 ? "B" : "T", 0xFFFFFFFF);
+        }
+        drawBetPile(c, x + 62, y + h - 52 - 54, running ? staked : bet);
         row(c, player, px, zy + 8, now);
         row(c, banker, bxx, zy + 8, now);
 

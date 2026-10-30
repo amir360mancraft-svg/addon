@@ -93,9 +93,11 @@ public class MinesGame extends Game {
         if (mine[i]) {
             phase = Phase.OVER;
             revealRest();
+            Sfx.boom();
             finish(staked, 0, "BOOM");
         } else {
             safe++;
+            Sfx.good(safe);
             if (safe == N - mines) cashOut("Cleared the field");
         }
     }
@@ -146,6 +148,7 @@ public class MinesGame extends Game {
             start.enabled = true;
             start.draw(c, mx, my);
         }
+        drawBetPile(c, x + 388, y + h - 52 - 48, phase == Phase.PLAY ? staked : bet);
         drawBetBar(c, x, y + h - 46, w, mx, my);
         drawBanner(c, gx + 5 * (TILE + GAP) / 2, y + 104);
     }

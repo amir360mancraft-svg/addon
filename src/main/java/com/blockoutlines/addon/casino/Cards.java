@@ -130,10 +130,10 @@ public final class Cards {
         String label = RANK[r];
         float lx = cx - (W / 2f - 8) * s, rx = cx + (W / 2f - 8) * s;
         // the two corners
-        UI.plain(c, lx, top + 8, 1.15f, label, col);
-        UI.suit(c, suit, lx, top + 19, 0.62f, col, false);
-        UI.plain(c, rx, top + H - 8, 1.15f, label, col);
-        UI.suit(c, suit, rx, top + H - 19, 0.62f, col, true);
+        UI.plain(c, lx, top + 8, 1.0f, label, col);
+        UI.suit(c, suit, lx, top + 18, 0.5f, col, false);
+        UI.plain(c, rx, top + H - 8, 1.0f, label, col);
+        UI.suit(c, suit, rx, top + H - 18, 0.5f, col, true);
         // the middle
         if (r == 0) {
             UI.suit(c, suit, cx, top + H / 2f, 3.4f, col, false);
@@ -145,9 +145,9 @@ public final class Cards {
             UI.suit(c, suit, cx + 10, top + H - 20, 0.7f, col, true);
         } else {
             for (float[] p : PIPS[r + 1]) {
-                float px = cx + p[0] * 11.5f;
-                float py = top + 6 + p[1] * (H - 12);
-                UI.suit(c, suit, px, py, 0.95f, col, p[1] > 0.5f);
+                float px = cx + p[0] * 9f;
+                float py = top + 8 + p[1] * (H - 16);
+                UI.suit(c, suit, px, py, 0.72f, col, p[1] > 0.5f);
             }
         }
     }

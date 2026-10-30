@@ -94,6 +94,7 @@ public abstract class Game {
             return false;
         }
         casino.balance -= amount;
+        Sfx.bet();
         return true;
     }
 
@@ -107,6 +108,8 @@ public abstract class Game {
         casino.save();
         if (!casino.unlimited() && bet > casino.balance && casino.balance > 0) bet = casino.balance;
         if (net > 0) burst = true;
+        if (net > 0) Sfx.win(net >= staked * 2);
+        else if (net < 0) Sfx.lose();
         String sub = net > 0 ? "+" + Money.pretty(net) : (net < 0 ? "-" + Money.pretty(-net) : "money back");
         banner(title, net > 0 ? UI.GOOD : (net < 0 ? UI.BAD : UI.GOLD), sub);
     }
@@ -161,33 +164,39 @@ public abstract class Game {
 
     // ---------------------------------------------------------------- bet bar
 
-    private static final int[] CHIP_COL = {0xFFE4E4EC, 0xFFD94A4A, 0xFF3F6BE0, 0xFF2A2A35};
+    private static final int[] CHIP_COL = {0xFF8C8CA0, 0xFFD94A4A, 0xFF3F6BE0, 0xFF2A2A35};
     private static final String[] CHIP_TXT = {"100", "1K", "10K", "100K"};
     private final int[] chipX = new int[4];
-    private int chipY, chipR = 12;
+    private int chipY, chipR = 11;
+
+    /** The bar is 46 px high: the first row has the label, the amount box (drawn by the screen), the chips and your balance; the second row has the buttons. */
+    /** The bet as chips on the table, with the amount under them. */
+    protected void drawBetPile(DrawContext c, int px, int py, long amount) {
+        if (amount <= 0) return;
+        UI.chipStack(c, px, py, amount);
+        UI.center(c, Money.pretty(amount), px, py + 9, UI.GOLD);
+    }
 
     protected void drawBetBar(DrawContext c, int x, int y, int w, int mx, int my) {
         boolean lock = busy();
         UI.rect(c, x, y, w, 1, UI.LINE);
-        UI.text(c, "BET", x + 2, y + 7, UI.MUTED);   // the amount box of the screen sits right of this
+        UI.text(c, "BET", x + 2, y + 9, UI.MUTED);
         String chips = Money.pretty(casino.balance);
-        UI.right(c, chips, x + w - 2, y + 7, casino.balance >= 0 ? UI.GOLD : UI.BAD);
-        UI.ellipse(c, x + w - 4 - UI.tr().getWidth(chips) - 8, y + 11, 5, 5, 0xFF9A7414);
-        UI.ellipse(c, x + w - 4 - UI.tr().getWidth(chips) - 8, y + 11, 4, 4, UI.GOLD);
+        UI.right(c, chips, x + w - 2, y + 9, casino.balance >= 0 ? UI.GOLD : UI.BAD);
+        UI.ellipse(c, x + w - 4 - UI.tr().getWidth(chips) - 8, y + 13, 5, 5, 0xFF9A7414);
+        UI.ellipse(c, x + w - 4 - UI.tr().getWidth(chips) - 8, y + 13, 4, 4, UI.GOLD);
 
-        chipY = y + 33;
+        chipY = y + 13;
         for (int i = 0; i < 4; i++) {
-            chipX[i] = x + 14 + i * 31;
+            chipX[i] = x + 166 + i * 27;
             boolean hover = !lock && Math.hypot(mx - chipX[i], my - chipY) <= chipR;
-            if (lock) {
-                UI.ellipse(c, chipX[i], chipY, chipR, chipR, 0xFF2A2A33);
-            } else UI.chip(c, chipX[i], chipY, chipR, CHIP_COL[i], CHIP_TXT[i], hover);
+            if (lock) UI.ellipse(c, chipX[i], chipY, chipR, chipR, 0xFF2A2A33);
+            else UI.chip(c, chipX[i], chipY, chipR, CHIP_COL[i], CHIP_TXT[i], hover);
         }
-        int sx = x + 4 * 31 + 8;
-        int bw = (w - (sx - x) - 3 * 4) / 4;
+        int bw = (w - 3 * 4) / 4;
         UI.Btn[] row = {clear, half, dbl, max};
         for (int i = 0; i < 4; i++) {
-            row[i].at(sx + i * (bw + 4), y + 22, bw, 22);
+            row[i].at(x + i * (bw + 4), y + 25, bw, 20);
             row[i].enabled = !lock;
             row[i].draw(c, mx, my);
         }
@@ -197,6 +206,7 @@ public abstract class Game {
         if (busy()) return false;
         for (int i = 0; i < 4; i++) {
             if (Math.hypot(mx - chipX[i], my - chipY) <= chipR) {
+                Sfx.tick();
                 bet = Math.min(cap(), bet + adds[i]);
                 return true;
             }

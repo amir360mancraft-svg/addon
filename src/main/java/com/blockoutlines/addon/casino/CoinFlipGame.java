@@ -13,6 +13,7 @@ public class CoinFlipGame extends Game {
     private long staked;
     private boolean paid;
     private int lastFace = 0;
+    private final java.util.List<Integer> hist = new java.util.ArrayList<>();
 
     private final UI.Btn heads = new UI.Btn("  Diamond", UI.PANEL2), tails = new UI.Btn("  Emerald", UI.PANEL2), flip = new UI.Btn("FLIP", UI.ACCENT);
 
@@ -40,6 +41,8 @@ public class CoinFlipGame extends Game {
         if (start >= 0 && !paid && now - start >= SPIN) {
             paid = true;
             lastFace = result;
+            hist.add(result);
+            if (hist.size() > 14) hist.remove(0);
             if (result == pick) finish(staked, staked * 2, (result == 0 ? "DIAMOND" : "EMERALD") + " - you win");
             else finish(staked, 0, (result == 0 ? "DIAMOND" : "EMERALD") + " - you lose");
         }
@@ -75,6 +78,8 @@ public class CoinFlipGame extends Game {
         UI.item(c, UI.diamond(), heads.x + 14, heads.y + 11, 1f, 1f);
         UI.item(c, UI.emerald(), tails.x + 14, tails.y + 11, 1f, 1f);
         flip.draw(c, mx, my);
+        for (int i = 0; i < hist.size(); i++) UI.item(c, hist.get(i) == 0 ? UI.diamond() : UI.emerald(), cx - (hist.size() - 1) * 9 + i * 18, y + 28, 0.8f, 0.8f);
+        drawBetPile(c, x + 62, y + h - 52 - 62, busy() ? staked : bet);
         UI.center(c, "Diamond or emerald - pays 2x - a fair 50/50", cx, y + 6, UI.MUTED);
 
         drawBetBar(c, x, y + h - 46, w, mx, my);
@@ -97,6 +102,7 @@ public class CoinFlipGame extends Game {
             if (!takeBet(bet)) return true;
             staked = bet;
             result = rng.nextInt(2);     // the only place where the result is decided
+            Sfx.tick();
             start = now();
             paid = false;
             return true;

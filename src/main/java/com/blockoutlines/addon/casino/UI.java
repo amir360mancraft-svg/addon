@@ -120,16 +120,55 @@ public final class UI {
         }
     }
 
-    /** A casino chip: a coloured disc with a ring and its value written on it. */
+    /** A casino chip: a coloured disc with a light ring and its value written on it. */
     public static void chip(DrawContext c, float cx, float cy, float r, int col, String label, boolean hover) {
         if (hover) r += 1;
         ellipse(c, cx + 1, cy + 2, r, r, 0x66000000);
-        ellipse(c, cx, cy, r, r, mix(col, 0xFF000000, 0.35f));
-        ellipse(c, cx, cy, r - 1, r - 1, col);
-        ellipse(c, cx, cy, r - 3, r - 3, 0xDDFFFFFF);
-        ellipse(c, cx, cy, r - 4.5f, r - 4.5f, col);
+        ellipse(c, cx, cy, r, r, 0xFFEFEFF6);
+        ellipse(c, cx, cy, r - 2, r - 2, col);
         int tc = luminance(col) > 150 ? 0xFF1A1A22 : 0xFFFFFFFF;
-        plain(c, cx, cy + 0.5f, 0.72f, label, tc);
+        plain(c, cx, cy + 0.5f, 0.6f, label, tc);
+    }
+
+    private static final long[] DEN = {1_000_000L, 100_000L, 10_000L, 1_000L, 100L, 1L};
+    private static final int[] DEN_COL = {0xFF8A4DFF, 0xFF2A2A35, 0xFF3F6BE0, 0xFFD94A4A, 0xFFE4E4EC, 0xFF8C8CA0};
+
+    /** The bet as stacks of chips: bigger chips first, centered on cx, standing on baseY. */
+    public static void chipStack(DrawContext c, float cx, float baseY, long amount) {
+        if (amount <= 0) return;
+        int[] kinds = new int[4];
+        int[] counts = new int[4];
+        int n = 0;
+        long rem = amount;
+        for (int k = 0; k < DEN.length && n < 4; k++) {
+            long cnt = rem / DEN[k];
+            if (cnt <= 0) continue;
+            kinds[n] = k;
+            counts[n] = (int) Math.min(cnt, k == 0 ? 12 : 8);
+            rem -= cnt * DEN[k];
+            n++;
+        }
+        for (int i = 0; i < n; i++) {
+            float sx = cx + (i - (n - 1) / 2f) * 26;
+            int col = DEN_COL[kinds[i]];
+            for (int j = 0; j < counts[i]; j++) {
+                float y = baseY - j * 3;
+                ellipse(c, sx, y + 2, 12, 5, 0x55000000);
+                ellipse(c, sx, y + 1, 11, 5, mix(col, 0xFF000000, 0.45f));
+                ellipse(c, sx, y, 11, 4.5f, col);
+                ellipse(c, sx, y, 7.5f, 3f, mix(col, 0xFFFFFFFF, 0.5f));
+                ellipse(c, sx, y, 5.5f, 2f, col);
+            }
+        }
+    }
+
+    /** A pulsing coloured frame around a part of the table (used to show who won). */
+    public static void glow(DrawContext c, int x, int y, int w, int h, int col, long since) {
+        long age = System.currentTimeMillis() - since;
+        if (age < 0 || age > 4000) return;
+        float k = (float) (0.5 + 0.5 * Math.sin(age / 140.0));
+        float fade = age > 3200 ? 1f - (age - 3200) / 800f : 1f;
+        for (int i = 0; i < 3; i++) outline(c, x - i, y - i, w + 2 * i, h + 2 * i, alpha(col, (0.35f + 0.5f * k) * fade / (1 + i)));
     }
 
     private static int luminance(int col) {
