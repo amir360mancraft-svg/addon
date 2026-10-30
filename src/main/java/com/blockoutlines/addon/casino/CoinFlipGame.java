@@ -14,7 +14,7 @@ public class CoinFlipGame extends Game {
     private boolean paid;
     private int lastFace = 0;
 
-    private final UI.Btn heads = new UI.Btn("Heads", UI.PANEL2), tails = new UI.Btn("Tails", UI.PANEL2), flip = new UI.Btn("FLIP", UI.ACCENT);
+    private final UI.Btn heads = new UI.Btn("  Diamond", UI.PANEL2), tails = new UI.Btn("  Emerald", UI.PANEL2), flip = new UI.Btn("FLIP", UI.ACCENT);
 
     public CoinFlipGame(Casino casino) {
         super(casino);
@@ -40,8 +40,8 @@ public class CoinFlipGame extends Game {
         if (start >= 0 && !paid && now - start >= SPIN) {
             paid = true;
             lastFace = result;
-            if (result == pick) finish(staked, staked * 2, (result == 0 ? "HEADS" : "TAILS") + " - you win");
-            else finish(staked, 0, (result == 0 ? "HEADS" : "TAILS") + " - you lose");
+            if (result == pick) finish(staked, staked * 2, (result == 0 ? "DIAMOND" : "EMERALD") + " - you win");
+            else finish(staked, 0, (result == 0 ? "DIAMOND" : "EMERALD") + " - you lose");
         }
 
         // the coin
@@ -53,11 +53,13 @@ public class CoinFlipGame extends Game {
         float cs = (float) Math.cos(theta);
         float rx = Math.max(2f, 44f * Math.abs(cs));
         float coinY = cy - lift;
+        boolean headsUp = cs > 0;
+        int body = headsUp ? 0xFF22B8C9 : 0xFF2EBF5E, edge = headsUp ? 0xFF14707C : 0xFF17703A, inner = headsUp ? 0xFF58DDE8 : 0xFF63E08E;
         UI.ellipse(c, cx, cy + 50, 40 - lift * 0.25f, 7, 0x55000000);     // shadow on the felt
-        UI.ellipse(c, cx, coinY + 3, rx, 44, 0xFF9A7414);                  // edge
-        UI.ellipse(c, cx, coinY, rx, 44, UI.GOLD);
-        UI.ellipse(c, cx, coinY, rx * 0.82f, 36, 0xFFE9A92C);
-        if (Math.abs(cs) > 0.25f) UI.scaled(c, cx, coinY, 3.4f * Math.abs(cs), 3.4f, cs > 0 ? "H" : "T", 0xFF6B4B00);
+        UI.ellipse(c, cx, coinY + 3, rx, 44, edge);
+        UI.ellipse(c, cx, coinY, rx, 44, body);
+        UI.ellipse(c, cx, coinY, rx * 0.82f, 36, inner);
+        if (Math.abs(cs) > 0.12f) UI.item(c, headsUp ? UI.diamond() : UI.emerald(), cx, coinY, 3.6f * Math.abs(cs), 3.6f);
 
         // your pick and the buttons
         int by = y + h - 52 - 34;
@@ -70,8 +72,10 @@ public class CoinFlipGame extends Game {
         heads.enabled = tails.enabled = flip.enabled = !lock;
         heads.draw(c, mx, my);
         tails.draw(c, mx, my);
+        UI.item(c, UI.diamond(), heads.x + 14, heads.y + 11, 1f, 1f);
+        UI.item(c, UI.emerald(), tails.x + 14, tails.y + 11, 1f, 1f);
         flip.draw(c, mx, my);
-        UI.center(c, "Pays 2x - a fair 50/50", cx, y + 6, UI.MUTED);
+        UI.center(c, "Diamond or emerald - pays 2x - a fair 50/50", cx, y + 6, UI.MUTED);
 
         drawBetBar(c, x, y + h - 46, w, mx, my);
         drawBanner(c, cx, y + 56);

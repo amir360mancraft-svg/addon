@@ -102,12 +102,12 @@ public final class Cards {
             }
         } else {
             UI.round(c, left, top, w, H, 0xFFF4F4F8);
-            if (w > 14) {
+            if (s > 0.45f) {
                 int col = red(id) ? 0xFFD62F3A : 0xFF1B1B26;
                 String r = RANK[rank(id)];
-                float sx = s;
-                UI.scaled(c, left + 8 * s + 3, top + 10, sx, 1f, r, col);
-                UI.scaled(c, cx, top + H / 2f + 2, 2.0f * sx, 2.0f, SUIT[id / 13], col);
+                UI.plain(c, cx - W / 2f * s + 9 * s + 2, top + 9, 1.5f * s, r, col);
+                UI.suit(c, id / 13, cx - W / 2f * s + 9 * s + 2, top + 21, 0.9f * s, col);
+                UI.suit(c, id / 13, cx + 2, top + H / 2f + 8, 2.6f * s, col);
             }
         }
     }

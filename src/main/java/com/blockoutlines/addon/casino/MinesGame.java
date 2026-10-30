@@ -164,14 +164,10 @@ public class MinesGame extends Game {
             float a = dim[i] ? 0.6f : 1f;
             if (mine[i]) {
                 UI.round(c, l, ty, w, TILE, UI.alpha(0xFF4A1A1F, a));
-                if (w > 12) {
-                    UI.ellipse(c, cx, cy, 10 * s, 10, UI.alpha(0xFFFF5C5C, a));
-                    UI.rect(c, Math.round(cx) - 1, ty + 6, 2, TILE - 12, UI.alpha(0xFFFF5C5C, a));
-                    UI.rect(c, Math.round(cx - 14 * s), Math.round(cy) - 1, Math.round(28 * s), 2, UI.alpha(0xFFFF5C5C, a));
-                }
+                if (w > 8) UI.item(c, UI.tnt(), cx, cy, 2.0f * s * (dim[i] ? 0.85f : 1f), dim[i] ? 1.7f : 2.0f);
             } else {
                 UI.round(c, l, ty, w, TILE, UI.alpha(0xFF123D2B, a));
-                if (w > 12) UI.diamond(c, cx, cy, Math.max(2, (int) (11 * s)), UI.alpha(0xFF3DDC84, a));
+                if (w > 8) UI.item(c, UI.diamond(), cx, cy, 2.0f * s * (dim[i] ? 0.85f : 1f), dim[i] ? 1.7f : 2.0f);
             }
         }
     }

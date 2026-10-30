@@ -11,6 +11,7 @@ import com.blockoutlines.addon.util.Money;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.widget.TextFieldWidget;
 import net.minecraft.text.Text;
 
 import java.util.ArrayList;
@@ -26,6 +27,9 @@ public class CasinoScreen extends Screen {
     private final UI.Btn reset = new UI.Btn("Reset chips", 0xFF4A2C2C), closeBtn = new UI.Btn("Close", UI.PANEL2);
     private int cur;
     private int left, top;
+    private TextFieldWidget betField;
+    private long shownBet = -1;
+    private boolean syncing;
 
     public CasinoScreen(Casino casino) {
         super(Text.literal("Casino"));
@@ -41,6 +45,26 @@ public class CasinoScreen extends Screen {
     protected void init() {
         left = (width - W) / 2;
         top = Math.max(4, (height - H) / 2);
+        betField = new TextFieldWidget(textRenderer, 0, 0, 110, 16, Text.literal("Bet"));
+        betField.setMaxLength(14);
+        betField.setChangedListener(t -> {
+            if (syncing) return;
+            long v = Money.parse(t);
+            if (v >= 0) {
+                games.get(cur).setBet(v);
+                shownBet = games.get(cur).bet();
+            }
+        });
+        addDrawableChild(betField);
+        shownBet = -1;
+    }
+
+    /** The text that goes in the amount box for this bet: 1000 -> 1k, 2500 -> 2500. */
+    private static String boxText(long v) {
+        if (v >= 1_000_000_000L && v % 1_000_000_000L == 0) return (v / 1_000_000_000L) + "b";
+        if (v >= 1_000_000L && v % 1_000_000L == 0) return (v / 1_000_000L) + "m";
+        if (v >= 1_000L && v % 1_000L == 0) return (v / 1_000L) + "k";
+        return String.valueOf(v);
     }
 
     @Override
@@ -84,12 +108,24 @@ public class CasinoScreen extends Screen {
         closeBtn.enabled = !busy;
 
         int gx = left + SIDE, gy = top + HEAD + 8, gw = W - SIDE - 8, gh = H - HEAD - 8 - 24;
+        // the amount box: it follows the bet when the buttons change it, and changes the bet when you type
+        betField.setX(gx + 26);
+        betField.setY(gy + gh - 46 + 3);
+        betField.setEditable(!busy);
+        if (g.bet() != shownBet) {
+            syncing = true;
+            betField.setText(boxText(g.bet()));
+            syncing = false;
+            shownBet = g.bet();
+        }
         g.render(ctx, gx, gy, gw, gh, mouseX, mouseY);
+        betField.render(ctx, mouseX, mouseY, delta);
         closeBtn.draw(ctx, mouseX, mouseY);
     }
 
     @Override
     public boolean mouseClicked(Click click, boolean doubled) {
+        boolean fieldHandled = super.mouseClicked(click, doubled);
         if (click.button() == 0) {
             int mx = (int) click.x(), my = (int) click.y();
             Game g = games.get(cur);
@@ -97,6 +133,7 @@ public class CasinoScreen extends Screen {
             for (int i = 0; i < tabs.size(); i++) {
                 if (tabs.get(i).hit(mx, my)) {
                     cur = i;
+                    shownBet = -1;
                     return true;
                 }
             }
@@ -110,6 +147,6 @@ public class CasinoScreen extends Screen {
             }
             if (g.click(mx, my)) return true;
         }
-        return super.mouseClicked(click, doubled);
+        return fieldHandled;
     }
 }

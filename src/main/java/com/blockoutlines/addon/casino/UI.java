@@ -3,6 +3,8 @@ package com.blockoutlines.addon.casino;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 
 /** Small drawing helpers shared by the casino games. */
 public final class UI {
@@ -10,6 +12,75 @@ public final class UI {
         GOOD = 0xFF3DDC84, BAD = 0xFFFF5C5C, GOLD = 0xFFFFC857, TEXT = 0xFFFFFFFF, MUTED = 0xFFB8B8C8, FELT = 0xFF0F5A3C;
 
     private UI() {}
+
+    private static ItemStack diamond, emerald, tnt;
+
+    public static ItemStack diamond() {
+        if (diamond == null) diamond = new ItemStack(Items.DIAMOND);
+        return diamond;
+    }
+
+    public static ItemStack emerald() {
+        if (emerald == null) emerald = new ItemStack(Items.EMERALD);
+        return emerald;
+    }
+
+    public static ItemStack tnt() {
+        if (tnt == null) tnt = new ItemStack(Items.TNT);
+        return tnt;
+    }
+
+    /** A real item icon centered on (cx, cy), stretched by sx / sy (16 px at scale 1). */
+    public static void item(DrawContext c, ItemStack st, float cx, float cy, float sx, float sy) {
+        if (sx < 0.08f || sy < 0.08f) return;
+        c.getMatrices().pushMatrix();
+        c.getMatrices().translate(cx, cy);
+        c.getMatrices().scale(sx, sy);
+        c.drawItem(st, -8, -8);
+        c.getMatrices().popMatrix();
+    }
+
+    /** Text without a shadow, centered on (cx, cy) with its own scale (for dark text on light cards). */
+    public static void plain(DrawContext c, float cx, float cy, float sc, String s, int col) {
+        c.getMatrices().pushMatrix();
+        c.getMatrices().translate(cx, cy);
+        c.getMatrices().scale(sc, sc);
+        c.drawText(tr(), s, -tr().getWidth(s) / 2, -4, col, false);
+        c.getMatrices().popMatrix();
+    }
+
+    private static void row(DrawContext c, float cx, float y, float half, int col) {
+        if (half < 0) return;
+        c.fill(Math.round(cx - half), Math.round(y), Math.round(cx + half) + 1, Math.round(y) + 1, col);
+    }
+
+    /** A card suit drawn from shapes: 0 spade, 1 heart, 2 diamond, 3 club. u is the size unit in pixels. */
+    public static void suit(DrawContext c, int suit, float cx, float cy, float u, int col) {
+        switch (suit) {
+            case 1 -> {
+                ellipse(c, cx - 3 * u, cy - 2 * u, 3.3f * u, 3.3f * u, col);
+                ellipse(c, cx + 3 * u, cy - 2 * u, 3.3f * u, 3.3f * u, col);
+                int n = Math.max(1, Math.round(7.5f * u));
+                for (int i = 0; i < n; i++) row(c, cx, cy - 1.2f * u + i, 6.2f * u * (1 - i / (float) n), col);
+            }
+            case 0 -> {
+                int n = Math.max(1, Math.round(7.5f * u));
+                for (int i = 0; i < n; i++) row(c, cx, cy - 6.5f * u + i, 6.2f * u * (i / (float) n), col);
+                ellipse(c, cx - 3 * u, cy + 0.5f * u, 3.3f * u, 3.3f * u, col);
+                ellipse(c, cx + 3 * u, cy + 0.5f * u, 3.3f * u, 3.3f * u, col);
+                c.fill(Math.round(cx - u), Math.round(cy + 2 * u), Math.round(cx + u), Math.round(cy + 6.5f * u), col);
+            }
+            case 2 -> {
+                for (int dy = -Math.round(7 * u); dy <= Math.round(7 * u); dy++) row(c, cx, cy + dy, 5.2f * u * (1 - Math.abs(dy) / (7f * u)), col);
+            }
+            default -> {
+                ellipse(c, cx, cy - 3 * u, 3.1f * u, 3.1f * u, col);
+                ellipse(c, cx - 3.3f * u, cy + 1.2f * u, 3.1f * u, 3.1f * u, col);
+                ellipse(c, cx + 3.3f * u, cy + 1.2f * u, 3.1f * u, 3.1f * u, col);
+                c.fill(Math.round(cx - u), Math.round(cy), Math.round(cx + u), Math.round(cy + 6.5f * u), col);
+            }
+        }
+    }
 
     public static TextRenderer tr() {
         return MinecraftClient.getInstance().textRenderer;
