@@ -12,6 +12,8 @@ import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.widget.TextFieldWidget;
+import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.text.Text;
 
 import java.util.ArrayList;
@@ -45,7 +47,7 @@ public class CasinoScreen extends Screen {
     protected void init() {
         left = (width - W) / 2;
         top = Math.max(4, (height - H) / 2);
-        betField = new TextFieldWidget(textRenderer, 0, 0, 110, 16, Text.literal("Bet"));
+        betField = new TextFieldWidget(textRenderer, 0, 0, 104, 12, Text.literal("Bet"));
         betField.setMaxLength(14);
         betField.setChangedListener(t -> {
             if (syncing) return;
@@ -81,27 +83,41 @@ public class CasinoScreen extends Screen {
 
     @Override
     public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
-        ctx.fill(0, 0, width, height, 0xA0000000);
-        UI.rect(ctx, left, top, W, H, UI.BG);
-        UI.rect(ctx, left, top, W, HEAD, 0xFF0E0E15);
-        UI.rect(ctx, left, top + HEAD - 1, W, 1, UI.LINE);
-        UI.scaled(ctx, left + 52, top + 15, 1.4f, 1.4f, "CASINO", UI.GOLD);
-        UI.right(ctx, "Chips  " + Money.pretty(casino.balance), left + W - 10, top + 6, UI.TEXT);
-        UI.right(ctx, "Rounds " + casino.rounds + "   Won " + casino.wins + "   Best +" + Money.pretty(casino.best), left + W - 10, top + 17, UI.MUTED);
+        ctx.fill(0, 0, width, height, 0xB0000000);
+        // the window
+        UI.round(ctx, left + 1, top + 3, W, H, 0x66000000);
+        UI.round(ctx, left, top, W, H, UI.LINE);
+        UI.grad(ctx, left + 1, top + 1, W - 2, H - 2, 0xFF191926, 0xFF0F0F18);
+        // header
+        UI.grad(ctx, left + 1, top + 1, W - 2, HEAD - 1, 0xFF262640, 0xFF16162A);
+        UI.rect(ctx, left + 1, top + HEAD - 1, W - 2, 1, UI.alpha(UI.ACCENT, 0.7f));
+        UI.item(ctx, UI.diamond(), left + 18, top + 15, 1f, 1f);
+        UI.scaled(ctx, left + 74, top + 15, 1.5f, 1.5f, "CASINO", UI.GOLD);
+        String chips = Money.pretty(casino.balance);
+        int pw = UI.tr().getWidth(chips) + 30;
+        UI.round(ctx, left + W - 12 - pw, top + 5, pw, 20, 0xFF0B0B13);
+        UI.ellipse(ctx, left + W - 12 - pw + 11, top + 15, 6, 6, 0xFF9A7414);
+        UI.ellipse(ctx, left + W - 12 - pw + 11, top + 15, 5, 5, UI.GOLD);
+        UI.right(ctx, chips, left + W - 18, top + 11, casino.balance >= 0 ? UI.TEXT : UI.BAD);
+        UI.right(ctx, "Rounds " + casino.rounds + "  Won " + casino.wins + "  Best +" + Money.pretty(casino.best), left + W - 24 - pw, top + 11, UI.MUTED);
 
         Game g = games.get(cur);
         boolean busy = g.busy();
+        // sidebar
+        UI.rect(ctx, left + SIDE - 1, top + HEAD, 1, H - HEAD - 1, UI.alpha(UI.LINE, 0.8f));
         for (int i = 0; i < tabs.size(); i++) {
             UI.Btn b = tabs.get(i);
-            b.at(left + 8, top + HEAD + 10 + i * 30, SIDE - 16, 24);
+            b.at(left + 8, top + HEAD + 10 + i * 32, SIDE - 16, 26);
             b.color = i == cur ? UI.ACCENT : UI.PANEL2;
             b.enabled = !busy || i == cur;
+            b.label = "      " + games.get(i).name();
             b.draw(ctx, mouseX, mouseY);
+            UI.item(ctx, icon(i), b.x + 15, b.y + 14, 1f, 1f);
         }
-        UI.text(ctx, "Fair draws.", left + 10, top + H - 74, UI.MUTED);
+        UI.text(ctx, "Fair draws only.", left + 10, top + H - 74, UI.MUTED);
         UI.text(ctx, "Practice chips,", left + 10, top + H - 62, UI.MUTED);
         UI.text(ctx, "not real money.", left + 10, top + H - 50, UI.MUTED);
-        reset.at(left + 8, top + H - 34, SIDE - 16, 18);
+        reset.at(left + 8, top + H - 34, SIDE - 16, 20);
         reset.enabled = !busy;
         reset.draw(ctx, mouseX, mouseY);
         closeBtn.at(left + W - 66, top + H - 22, 58, 16);
@@ -109,9 +125,11 @@ public class CasinoScreen extends Screen {
 
         int gx = left + SIDE, gy = top + HEAD + 8, gw = W - SIDE - 8, gh = H - HEAD - 8 - 24;
         // the amount box: it follows the bet when the buttons change it, and changes the bet when you type
-        betField.setX(gx + 26);
-        betField.setY(gy + gh - 46 + 3);
+        int fx = gx + 28, fy = gy + gh - 46 + 3;
+        betField.setX(fx + 4);
+        betField.setY(fy + 4);
         betField.setEditable(!busy);
+        betField.setDrawsBackground(false);
         if (g.bet() != shownBet) {
             syncing = true;
             betField.setText(boxText(g.bet()));
@@ -119,8 +137,19 @@ public class CasinoScreen extends Screen {
             shownBet = g.bet();
         }
         g.render(ctx, gx, gy, gw, gh, mouseX, mouseY);
+        UI.round(ctx, fx, fy, 112, 20, betField.isFocused() ? UI.ACCENT : UI.LINE);
+        UI.round(ctx, fx + 1, fy + 1, 110, 18, 0xFF0B0B13);
         betField.render(ctx, mouseX, mouseY, delta);
         closeBtn.draw(ctx, mouseX, mouseY);
+    }
+
+    private ItemStack icon(int i) {
+        return switch (i) {
+            case 0 -> UI.stack(Items.PAPER);
+            case 1 -> UI.stack(Items.BOOK);
+            case 2 -> UI.stack(Items.GOLD_INGOT);
+            default -> UI.tnt();
+        };
     }
 
     @Override

@@ -120,7 +120,7 @@ public class BlackjackGame extends Game {
         runTasks();
         long now = now();
         int cx = x + w / 2;
-        UI.round(c, x, y, w, h - 52, UI.FELT);
+        UI.felt(c, x, y, w, h - 52);
         deckX = x + w - Cards.W - 14;
         deckY = y + 12;
         Cards.pile(c, deckX, deckY);

@@ -109,16 +109,20 @@ public class BaccaratGame extends Game {
         runTasks();
         long now = now();
         int cx = x + w / 2;
-        UI.round(c, x, y, w, h - 52, UI.FELT);
+        UI.felt(c, x, y, w, h - 52);
         deckX = cx - Cards.W / 2f;
         deckY = y + 8;
         Cards.pile(c, deckX, deckY);
 
         int px = x + w / 4, bxx = x + w * 3 / 4;
-        UI.center(c, "PLAYER" + shown(player, now), px, y + 82, pick == 0 ? UI.GOLD : UI.TEXT);
-        UI.center(c, "BANKER" + shown(banker, now), bxx, y + 82, pick == 1 ? UI.GOLD : UI.TEXT);
-        row(c, player, px, y + 98, now);
-        row(c, banker, bxx, y + 98, now);
+        int zy = y + 92, zh = Cards.H + 16;
+        UI.outline(c, px - 100, zy, 200, zh, UI.alpha(pick == 0 ? UI.GOLD : UI.TEXT, pick == 0 ? 0.7f : 0.22f));
+        UI.outline(c, bxx - 100, zy, 200, zh, UI.alpha(pick == 1 ? UI.GOLD : UI.TEXT, pick == 1 ? 0.7f : 0.22f));
+        UI.center(c, "PLAYER" + shown(player, now), px, y + 80, pick == 0 ? UI.GOLD : UI.TEXT);
+        UI.center(c, "BANKER" + shown(banker, now), bxx, y + 80, pick == 1 ? UI.GOLD : UI.TEXT);
+        if (pick == 2) UI.center(c, "TIE", cx, y + 80, UI.GOLD);
+        row(c, player, px, zy + 8, now);
+        row(c, banker, bxx, zy + 8, now);
 
         int by = y + h - 52 - 34;
         bp.at(cx - 215, by, 100, 22);
@@ -152,7 +156,7 @@ public class BaccaratGame extends Game {
 
     private void row(DrawContext c, List<Cards.Card> hand, int cx, int top, long now) {
         int n = hand.size();
-        int step = Cards.W + 6;
+        int step = Cards.W + 4;
         float left = cx - ((n - 1) * step + Cards.W) / 2f;
         for (int i = 0; i < n; i++) Cards.draw(c, hand.get(i), left + i * step, top, now);
     }

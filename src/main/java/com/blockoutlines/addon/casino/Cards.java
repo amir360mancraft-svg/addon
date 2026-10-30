@@ -11,9 +11,22 @@ import java.util.List;
 public final class Cards {
     private Cards() {}
 
-    public static final int W = 44, H = 62;
+    public static final int W = 56, H = 78;
     private static final String[] RANK = {"A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"};
-    private static final String[] SUIT = {"♠", "♥", "♦", "♣"};
+    /** Where the pips of the number cards go: x as -1 / 0 / 1 (left, middle, right) and y from 0 (top) to 1 (bottom). */
+    private static final float[][][] PIPS = {
+        {},
+        {{0, .5f}},
+        {{0, .2f}, {0, .8f}},
+        {{0, .2f}, {0, .5f}, {0, .8f}},
+        {{-1, .2f}, {1, .2f}, {-1, .8f}, {1, .8f}},
+        {{-1, .2f}, {1, .2f}, {0, .5f}, {-1, .8f}, {1, .8f}},
+        {{-1, .2f}, {1, .2f}, {-1, .5f}, {1, .5f}, {-1, .8f}, {1, .8f}},
+        {{-1, .2f}, {1, .2f}, {0, .35f}, {-1, .5f}, {1, .5f}, {-1, .8f}, {1, .8f}},
+        {{-1, .2f}, {1, .2f}, {0, .35f}, {-1, .5f}, {1, .5f}, {0, .65f}, {-1, .8f}, {1, .8f}},
+        {{-1, .2f}, {1, .2f}, {-1, .4f}, {1, .4f}, {0, .5f}, {-1, .6f}, {1, .6f}, {-1, .8f}, {1, .8f}},
+        {{-1, .2f}, {1, .2f}, {0, .3f}, {-1, .4f}, {1, .4f}, {-1, .6f}, {1, .6f}, {0, .7f}, {-1, .8f}, {1, .8f}},
+    };
 
     public static int rank(int id) {
         return id % 13;
@@ -92,31 +105,56 @@ public final class Cards {
         float cx = x + W / 2f;
         int w = Math.max(2, Math.round(W * s));
         int left = Math.round(cx - w / 2f), top = Math.round(y);
-        UI.rect(c, left + 1, top + 2, w, H, 0x66000000);
+        UI.round(c, left + 1, top + 3, w, H, 0x66000000);
         if (flip < 0.5f) {
-            UI.round(c, left, top, w, H, 0xFF2B3FA8);
-            if (w > 12) {
-                UI.rect(c, left + 4, top + 4, w - 8, H - 8, 0xFF3A55D6);
-                UI.rect(c, left + 6, top + 6, w - 12, H - 12, 0xFF2B3FA8);
-                UI.diamond(c, cx, top + H / 2f, Math.max(2, (int) (8 * s)), 0xFF8FA5FF);
+            UI.round(c, left, top, w, H, 0xFFE8E8F0);
+            if (w > 8) {
+                UI.round(c, left + 2, top + 2, w - 4, H - 4, 0xFF2B3FA8);
+                if (w > 14) {
+                    UI.rect(c, left + 5, top + 5, w - 10, H - 10, 0xFF3A55D6);
+                    UI.rect(c, left + 7, top + 7, w - 14, H - 14, 0xFF2B3FA8);
+                    UI.diamond(c, cx, top + H / 2f, Math.max(2, (int) (10 * s)), 0xFF8FA5FF);
+                    UI.diamond(c, cx, top + H / 2f, Math.max(1, (int) (5 * s)), 0xFF2B3FA8);
+                }
             }
         } else {
-            UI.round(c, left, top, w, H, 0xFFF4F4F8);
-            if (s > 0.45f) {
-                int col = red(id) ? 0xFFD62F3A : 0xFF1B1B26;
-                String r = RANK[rank(id)];
-                UI.plain(c, cx - W / 2f * s + 9 * s + 2, top + 9, 1.5f * s, r, col);
-                UI.suit(c, id / 13, cx - W / 2f * s + 9 * s + 2, top + 21, 0.9f * s, col);
-                UI.suit(c, id / 13, cx + 2, top + H / 2f + 8, 2.6f * s, col);
+            UI.round(c, left, top, w, H, 0xFFCFCFDA);
+            UI.round(c, left + 1, top + 1, w - 2, H - 2, 0xFFF8F8FC);
+            if (s > 0.6f) face(c, id, cx, top, s);
+        }
+    }
+
+    private static void face(DrawContext c, int id, float cx, int top, float s) {
+        int col = red(id) ? 0xFFD62F3A : 0xFF1B1B26;
+        int r = rank(id), suit = id / 13;
+        String label = RANK[r];
+        float lx = cx - (W / 2f - 8) * s, rx = cx + (W / 2f - 8) * s;
+        // the two corners
+        UI.plain(c, lx, top + 8, 1.15f, label, col);
+        UI.suit(c, suit, lx, top + 19, 0.62f, col, false);
+        UI.plain(c, rx, top + H - 8, 1.15f, label, col);
+        UI.suit(c, suit, rx, top + H - 19, 0.62f, col, true);
+        // the middle
+        if (r == 0) {
+            UI.suit(c, suit, cx, top + H / 2f, 3.4f, col, false);
+        } else if (r >= 10) {
+            UI.rect(c, Math.round(cx - 17), top + 12, 34, H - 24, 0xFFFFF3C4);
+            UI.outline(c, Math.round(cx - 17), top + 12, 34, H - 24, 0xFFC9A227);
+            UI.plain(c, cx, top + H / 2f, 2.6f, label, col);
+            UI.suit(c, suit, cx - 10, top + 20, 0.7f, col, false);
+            UI.suit(c, suit, cx + 10, top + H - 20, 0.7f, col, true);
+        } else {
+            for (float[] p : PIPS[r + 1]) {
+                float px = cx + p[0] * 11.5f;
+                float py = top + 6 + p[1] * (H - 12);
+                UI.suit(c, suit, px, py, 0.95f, col, p[1] > 0.5f);
             }
         }
     }
 
     /** A pile that looks like a deck. */
     public static void pile(DrawContext c, float x, float y) {
-        for (int i = 3; i >= 0; i--) {
-            UI.round(c, Math.round(x) + i, Math.round(y) + i, W, H, i == 0 ? 0xFF2B3FA8 : 0xFF1E2C78);
-        }
-        UI.rect(c, Math.round(x) + 6, Math.round(y) + 6, W - 12, H - 12, 0xFF3A55D6);
+        for (int i = 4; i >= 1; i--) UI.round(c, Math.round(x) + i, Math.round(y) + i, W, H, i == 4 ? 0x66000000 : 0xFF1E2C78);
+        drawAt(c, 0, x, y, 0f);
     }
 }

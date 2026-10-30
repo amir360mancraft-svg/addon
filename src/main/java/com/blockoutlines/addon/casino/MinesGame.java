@@ -103,7 +103,7 @@ public class MinesGame extends Game {
     @Override
     public void render(DrawContext c, int x, int y, int w, int h, int mx, int my) {
         long now = now();
-        UI.round(c, x, y, w, h - 52, UI.PANEL);
+        UI.panel(c, x, y, w, h - 52, UI.PANEL);
         gx = x + 24;
         gy = y + 14;
         for (int i = 0; i < N; i++) {

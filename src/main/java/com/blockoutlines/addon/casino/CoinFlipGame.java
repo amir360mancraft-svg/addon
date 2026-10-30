@@ -34,7 +34,7 @@ public class CoinFlipGame extends Game {
     public void render(DrawContext c, int x, int y, int w, int h, int mx, int my) {
         long now = now();
         int cx = x + w / 2, cy = y + 112;
-        UI.round(c, x, y, w, h - 52, UI.FELT);
+        UI.felt(c, x, y, w, h - 52);
 
         // finish the round when the spin is over
         if (start >= 0 && !paid && now - start >= SPIN) {
