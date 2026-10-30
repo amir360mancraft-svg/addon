@@ -29,6 +29,65 @@ public class MinesGame extends Game {
         Arrays.fill(revT, -1);
     }
 
+    // ---- the same game for the 3D table
+    public static int tiles() {
+        return N;
+    }
+
+    public boolean playing() {
+        return phase == Phase.PLAY;
+    }
+
+    public int minesCount() {
+        return mines;
+    }
+
+    public void minesDelta(int d) {
+        if (phase != Phase.PLAY) mines = Math.max(1, Math.min(24, mines + d));
+    }
+
+    public int safeCount() {
+        return safe;
+    }
+
+    public double multiplier() {
+        return phase == Phase.IDLE ? 1.0 : mult(safe);
+    }
+
+    public double nextMultiplier() {
+        return mult(safe + 1);
+    }
+
+    public long winNow() {
+        return payoutNow();
+    }
+
+    /** -1 while the tile is hidden, otherwise how far it has turned (0..1). */
+    public float tileFlip(int i) {
+        if (revT[i] < 0) return -1f;
+        return Math.max(0, Math.min(1, (now() - revT[i]) / 260f));
+    }
+
+    public boolean tileMine(int i) {
+        return mine[i];
+    }
+
+    public boolean tileDim(int i) {
+        return dim[i];
+    }
+
+    public void startRound() {
+        if (phase != Phase.PLAY) begin();
+    }
+
+    public void pickTileNow(int i) {
+        pickTile(i);
+    }
+
+    public void cashOutNow() {
+        if (phase == Phase.PLAY && safe > 0) cashOut("Cashed out " + String.format("%.2fx", mult(safe)));
+    }
+
     @Override
     public String name() {
         return "Mines";

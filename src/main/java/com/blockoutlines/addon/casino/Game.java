@@ -16,6 +16,7 @@ public abstract class Game {
     protected long bet = 1000;
 
     private final long[] adds = {100, 1_000, 10_000, 100_000};
+    public static final long[] CHIPS = {100, 1_000, 10_000, 100_000};
     private final UI.Btn clear = new UI.Btn("Clear", UI.PANEL2), half = new UI.Btn("1/2", UI.PANEL2),
         dbl = new UI.Btn("x2", UI.PANEL2), max = new UI.Btn("Max", UI.PANEL2);
 
@@ -43,6 +44,42 @@ public abstract class Game {
     /** The most a button may raise the bet to. */
     protected long cap() {
         return casino.unlimited() ? Casino.MAX_BET : Math.max(0, casino.balance);
+    }
+
+    // the same bet controls for other screens (the 3D table)
+    public void betAdd(long v) {
+        if (busy()) return;
+        bet = Math.min(cap(), bet + v);
+        Sfx.tick();
+    }
+
+    public void betClear() {
+        if (!busy()) bet = 0;
+    }
+
+    public void betHalf() {
+        if (!busy()) bet = Math.max(0, bet / 2);
+    }
+
+    public void betDouble() {
+        if (!busy()) bet = Math.min(cap(), bet * 2);
+    }
+
+    /** The big message of the last round and how long ago it appeared (for screens that draw their own). */
+    public String resultText() {
+        return bannerText;
+    }
+
+    public String resultSub() {
+        return bannerSub;
+    }
+
+    public int resultColor() {
+        return bannerColor;
+    }
+
+    public long resultAge() {
+        return now() - bannerAt;
     }
 
     public abstract String name();
