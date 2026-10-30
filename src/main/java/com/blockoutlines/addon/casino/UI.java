@@ -47,7 +47,7 @@ public final class UI {
     }
 
     /** Text centered on (cx, cy) with its own scale in x and y. */
-    public static void scaled(DrawContext c, String s, float cx, float cy, float sx, float sy, int col) {
+    public static void scaled(DrawContext c, float cx, float cy, float sx, float sy, String s, int col) {
         if (sx < 0.05f || sy < 0.05f) return;
         c.getMatrices().pushMatrix();
         c.getMatrices().translate(cx, cy);
