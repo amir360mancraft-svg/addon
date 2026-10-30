@@ -140,7 +140,7 @@ public class BlackjackGame extends Game {
         dbl.at(cx + 50, by, 85, 22);
         deal.enabled = idle;
         hit.enabled = stand.enabled = play;
-        dbl.enabled = play && player.size() == 2 && casino.balance >= staked;
+        dbl.enabled = play && player.size() == 2 && (casino.unlimited() || casino.balance >= staked);
         if (idle) deal.draw(c, mx, my);
         else {
             hit.draw(c, mx, my);

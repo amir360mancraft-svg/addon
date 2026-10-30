@@ -4,6 +4,7 @@ import com.blockoutlines.addon.BlockOutlinesAddon;
 import com.blockoutlines.addon.gui.CasinoScreen;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.KeybindSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
@@ -20,6 +21,7 @@ import java.nio.file.Files;
  */
 public class Casino extends Module {
     public static final long START = 100_000L;
+    public static final long MAX_BET = 1_000_000_000_000_000L;
 
     private static final class Data {
         long balance = START;
@@ -32,6 +34,13 @@ public class Casino extends Module {
     private final SettingGroup sg = settings.getDefaultGroup();
     private final Setting<Keybind> openKey = sg.add(new KeybindSetting.Builder().name("open-key")
         .description("Opens the casino window.").defaultValue(Keybind.none()).action(this::open).build());
+
+    private final Setting<Boolean> unlimited = sg.add(new BoolSetting.Builder().name("unlimited-chips")
+        .description("You can bet any amount, even more than your chips (the chips can go below zero). Just for fun.").defaultValue(true).build());
+
+    public boolean unlimited() {
+        return unlimited.get();
+    }
 
     public Casino() {
         super(BlockOutlinesAddon.CATEGORY, "casino", "Blackjack, baccarat, coin flip and mines with animations. Practice chips, fair draws.");

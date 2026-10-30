@@ -29,6 +29,19 @@ public abstract class Game {
         for (String n : names) betBtns.add(new UI.Btn(n, UI.PANEL2));
     }
 
+    public long bet() {
+        return bet;
+    }
+
+    public void setBet(long v) {
+        bet = Math.max(0, Math.min(v, Casino.MAX_BET));
+    }
+
+    /** The most a button may raise the bet to. */
+    protected long cap() {
+        return casino.unlimited() ? Casino.MAX_BET : Math.max(0, casino.balance);
+    }
+
     public abstract String name();
 
     /** True while a round is running (the bet can not be changed then). */
@@ -73,7 +86,7 @@ public abstract class Game {
             banner("Put a bet first", UI.GOLD, "");
             return false;
         }
-        if (amount > casino.balance) {
+        if (!casino.unlimited() && amount > casino.balance) {
             banner("Not enough chips", UI.BAD, "");
             return false;
         }
@@ -89,7 +102,7 @@ public abstract class Game {
         if (net > 0) casino.wins++;
         if (net > casino.best) casino.best = net;
         casino.save();
-        if (bet > casino.balance && casino.balance > 0) bet = casino.balance;
+        if (!casino.unlimited() && bet > casino.balance && casino.balance > 0) bet = casino.balance;
         String sub = net > 0 ? "+" + Money.pretty(net) : (net < 0 ? "-" + Money.pretty(-net) : "money back");
         banner(title, net > 0 ? UI.GOOD : (net < 0 ? UI.BAD : UI.GOLD), sub);
     }
@@ -121,9 +134,8 @@ public abstract class Game {
     protected void drawBetBar(DrawContext c, int x, int y, int w, int mx, int my) {
         boolean lock = busy();
         UI.rect(c, x, y, w, 1, UI.LINE);
-        UI.text(c, "Bet", x + 2, y + 6, UI.MUTED);
-        UI.text(c, Money.pretty(bet), x + 24, y + 6, UI.GOLD);
-        UI.right(c, "Chips  " + Money.pretty(casino.balance), x + w - 2, y + 6, casino.balance > 0 ? UI.TEXT : UI.BAD);
+        UI.text(c, "Bet", x + 2, y + 6, UI.MUTED);   // the amount box of the screen sits right of this
+        UI.right(c, "Chips  " + Money.pretty(casino.balance), x + w - 2, y + 6, casino.balance >= 0 ? UI.TEXT : UI.BAD);
         int n = 8, gap = 4, bw = (w - gap * (n - 1)) / n;
         int by = y + 20;
         List<UI.Btn> all = new ArrayList<>(betBtns);
@@ -143,7 +155,7 @@ public abstract class Game {
         if (busy()) return false;
         for (int i = 0; i < betBtns.size(); i++) {
             if (betBtns.get(i).hit(mx, my)) {
-                bet = Math.min(casino.balance, bet + adds[i]);
+                bet = Math.min(cap(), bet + adds[i]);
                 return true;
             }
         }
@@ -156,11 +168,11 @@ public abstract class Game {
             return true;
         }
         if (dbl.hit(mx, my)) {
-            bet = Math.min(casino.balance, bet * 2);
+            bet = Math.min(cap(), bet * 2);
             return true;
         }
         if (max.hit(mx, my)) {
-            bet = casino.balance;
+            bet = casino.unlimited() ? Math.max(bet, Math.max(0, casino.balance)) : cap();
             return true;
         }
         return false;
