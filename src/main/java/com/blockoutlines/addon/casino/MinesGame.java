@@ -8,7 +8,7 @@ import java.util.Arrays;
 
 /** 5x5 field with hidden mines. Every safe tile raises the multiplier, cash out any time. The multiplier is the fair one (no house edge). */
 public class MinesGame extends Game {
-    private static final int N = 25, TILE = 44, GAP = 4;
+    private static final int N = 25, TILE = 40, GAP = 4;
 
     private enum Phase { IDLE, PLAY, OVER }
 
@@ -148,9 +148,9 @@ public class MinesGame extends Game {
             start.enabled = true;
             start.draw(c, mx, my);
         }
-        drawBetPile(c, x + 388, y + h - 52 - 48, phase == Phase.PLAY ? staked : bet);
+        drawBetPile(c, x + 388, y + h - 52 - 66, phase == Phase.PLAY ? staked : bet);
         drawBetBar(c, x, y + h - 46, w, mx, my);
-        drawBanner(c, gx + 5 * (TILE + GAP) / 2, y + 104);
+        drawBanner(c, gx + 5 * (TILE + GAP) / 2, y + 100);
     }
 
     private void drawTile(DrawContext c, int i, int tx, int ty, long now, int mx, int my) {

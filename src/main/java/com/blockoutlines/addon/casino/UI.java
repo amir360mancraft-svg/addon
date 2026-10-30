@@ -221,41 +221,79 @@ public final class UI {
 
     // ------------------------------------------------------------------ card suits
 
-    private static void row(DrawContext c, float cx, float y, float half, int col) {
-        if (half < 0) return;
-        c.fill(Math.round(cx - half), Math.round(y), Math.round(cx + half) + 1, Math.round(y) + 1, col);
+    private static final int GW = 9, GH = 10;
+    private static final boolean[][][] MASK = new boolean[4][GH][GW];
+
+    static {
+        for (int y = 0; y < GH; y++) {
+            for (int x = 0; x < GW; x++) {
+                double px = x + 0.5, py = y + 0.5;
+                MASK[1][y][x] = heart(px, py);
+                MASK[0][y][x] = heart(px, 9.2 - py + 0.4) && py < 8.2 || (py >= 7.2 && Math.abs(px - 4.5) <= (py >= 9 ? 2.2 : 1.0));
+                MASK[2][y][x] = Math.abs(px - 4.5) / 4.5 + Math.abs(py - 5.0) / 5.0 <= 1.0;
+                MASK[3][y][x] = circle(px, py, 4.5, 2.6, 2.5) || circle(px, py, 2.4, 5.6, 2.5) || circle(px, py, 6.6, 5.6, 2.5)
+                    || (py >= 5.5 && Math.abs(px - 4.5) <= (py >= 8.6 ? 2.3 : 0.95));
+            }
+        }
     }
 
-    private static void vrect(DrawContext c, float x1, float y1, float x2, float y2, int col) {
-        c.fill(Math.round(Math.min(x1, x2)), Math.round(Math.min(y1, y2)), Math.round(Math.max(x1, x2)), Math.round(Math.max(y1, y2)), col);
+    private static boolean circle(double x, double y, double cx, double cy, double r) {
+        return (x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r;
     }
 
-    /** A card suit drawn from shapes: 0 spade, 1 heart, 2 diamond, 3 club. u is the size unit in pixels, inv turns it upside down. */
-    public static void suit(DrawContext c, int suit, float cx, float cy, float u, int col, boolean inv) {
-        float k = inv ? -1 : 1;
-        switch (suit) {
-            case 1 -> {
-                ellipse(c, cx - 3 * u, cy - k * 2 * u, 3.3f * u, 3.3f * u, col);
-                ellipse(c, cx + 3 * u, cy - k * 2 * u, 3.3f * u, 3.3f * u, col);
-                int n = Math.max(1, Math.round(7.5f * u));
-                for (int i = 0; i < n; i++) row(c, cx, cy + k * (-1.2f * u + i), 6.2f * u * (1 - i / (float) n), col);
+    private static boolean heart(double x, double y) {
+        if (circle(x, y, 2.6, 2.7, 2.65) || circle(x, y, 6.4, 2.7, 2.65)) return true;
+        return y >= 2.7 && y <= 9.4 && Math.abs(x - 4.5) <= 4.9 * (9.4 - y) / 6.7;
+    }
+
+    /** A card suit from a small pixel mask (clean at any whole size): 0 spade, 1 heart, 2 diamond, 3 club. One mask cell is p pixels. */
+    public static void pix(DrawContext c, int suit, float cx, float cy, int p, int col) {
+        int x0 = Math.round(cx - GW * p / 2f), y0 = Math.round(cy - GH * p / 2f);
+        boolean[][] m = MASK[suit];
+        for (int y = 0; y < GH; y++) {
+            int x = 0;
+            while (x < GW) {
+                if (!m[y][x]) {
+                    x++;
+                    continue;
+                }
+                int e = x;
+                while (e < GW && m[y][e]) e++;
+                c.fill(x0 + x * p, y0 + y * p, x0 + e * p, y0 + (y + 1) * p, col);
+                x = e;
             }
-            case 0 -> {
-                int n = Math.max(1, Math.round(7.5f * u));
-                for (int i = 0; i < n; i++) row(c, cx, cy + k * (-6.5f * u + i), 6.2f * u * (i / (float) n), col);
-                ellipse(c, cx - 3 * u, cy + k * 0.5f * u, 3.3f * u, 3.3f * u, col);
-                ellipse(c, cx + 3 * u, cy + k * 0.5f * u, 3.3f * u, 3.3f * u, col);
-                vrect(c, cx - u, cy + k * 2 * u, cx + u, cy + k * 6.5f * u, col);
-            }
-            case 2 -> {
-                int m = Math.round(7 * u);
-                for (int dy = -m; dy <= m; dy++) row(c, cx, cy + dy, 5.2f * u * (1 - Math.abs(dy) / (float) m), col);
-            }
-            default -> {
-                ellipse(c, cx, cy - k * 3 * u, 3.1f * u, 3.1f * u, col);
-                ellipse(c, cx - 3.3f * u, cy + k * 1.2f * u, 3.1f * u, 3.1f * u, col);
-                ellipse(c, cx + 3.3f * u, cy + k * 1.2f * u, 3.1f * u, 3.1f * u, col);
-                vrect(c, cx - u, cy, cx + u, cy + k * 6.5f * u, col);
+        }
+    }
+
+    // 0 spade, 1 heart, 2 diamond, 3 club. BIG are about 11 px, SMALL about 7 px.
+    private static final String[][] BIG = {
+        {".....#.....", "....###....", "...#####...", "..#######..", ".#########.", "###########", "###########", "###########", ".####.####.", "....###....", "...#####..."},
+        {"..###.###..", ".#########.", "###########", "###########", "###########", ".#########.", "..#######..", "...#####...", "....###....", ".....#....."},
+        {"....#....", "...###...", "..#####..", ".#######.", "#########", "#########", ".#######.", "..#####..", "...###...", "....#...."},
+        {"....###....", "...#####...", "...#####...", ".##.###.##.", "####.#.####", "###########", "###########", ".###.#.###.", ".....#.....", "....###....", "...#####..."},
+    };
+    private static final String[][] SMALL = {
+        {"...#...", "..###..", ".#####.", "#######", "#######", "...#...", "..###.."},
+        {".##.##.", "#######", "#######", ".#####.", "..###..", "...#..."},
+        {"...#...", "..###..", ".#####.", "#######", ".#####.", "..###..", "...#..."},
+        {"..###..", "..###..", "##.#.##", "#######", "##.#.##", "...#...", "..###.."},
+    };
+
+    /** A card suit as a small pixel picture, centered on (cx, cy). cell = pixels per dot, inv = upside down. */
+    public static void suit(DrawContext c, int suit, float cx, float cy, int cell, boolean big, int col, boolean inv) {
+        String[] rows = (big ? BIG : SMALL)[Math.max(0, Math.min(3, suit))];
+        int h = rows.length, w = rows[0].length();
+        int x0 = Math.round(cx - w * cell / 2f), y0 = Math.round(cy - h * cell / 2f);
+        for (int r = 0; r < h; r++) {
+            String line = rows[inv ? h - 1 - r : r];
+            int start = -1;
+            for (int i = 0; i <= w; i++) {
+                boolean on = i < w && line.charAt(i) == '#';
+                if (on && start < 0) start = i;
+                if (!on && start >= 0) {
+                    c.fill(x0 + start * cell, y0 + r * cell, x0 + i * cell, y0 + (r + 1) * cell, col);
+                    start = -1;
+                }
             }
         }
     }

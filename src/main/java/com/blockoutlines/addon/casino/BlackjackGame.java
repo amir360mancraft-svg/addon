@@ -132,15 +132,15 @@ public class BlackjackGame extends Game {
         deckY = y + 12;
         Cards.pile(c, deckX, deckY);
 
-        UI.text(c, "Dealer" + (dealer.isEmpty() ? "" : "  " + total(dealer, true)), x + 10, y + 8, UI.TEXT);
-        drawHand(c, dealer, cx, y + 24, now);
-        UI.text(c, "You" + (player.isEmpty() ? "" : "  " + total(player, false)), x + 10, y + 118, UI.TEXT);
-        drawHand(c, player, cx, y + 134, now);
-        UI.glow(c, cx - 118, y + 126, 236, Cards.H + 16, resultCol, resultAt);
-        drawBetPile(c, x + 62, y + h - 52 - 62, busy() ? staked : bet);
-        UI.center(c, "Blackjack pays 3:2  -  dealer stands on 17", cx, y + h - 52 - 14, UI.alpha(UI.TEXT, 0.55f));
+        UI.text(c, "Dealer" + (dealer.isEmpty() ? "" : "  " + total(dealer, true)), x + 16, y + 12, UI.TEXT);
+        UI.center(c, "Blackjack pays 3:2  -  dealer stands on 17", cx, y + 8, UI.alpha(UI.TEXT, 0.5f));
+        drawHand(c, dealer, cx, y + 20, now);
+        UI.text(c, "You" + (player.isEmpty() ? "" : "  " + total(player, false)), x + 16, y + 104, UI.TEXT);
+        drawHand(c, player, cx, y + 110, now);
+        UI.glow(c, cx - 130, y + 104, 260, Cards.H + 12, resultCol, resultAt);
+        drawBetPile(c, x + 62, y + 190, busy() ? staked : bet);
 
-        int by = y + h - 52 - 36;
+        int by = y + h - 52 - 34;
         boolean play = phase == Phase.PLAY;
         boolean idle = phase == Phase.IDLE || phase == Phase.DONE;
         deal.at(cx - 45, by, 90, 22);
@@ -157,12 +157,12 @@ public class BlackjackGame extends Game {
             dbl.draw(c, mx, my);
         }
         drawBetBar(c, x, y + h - 46, w, mx, my);
-        drawBanner(c, cx, y + 112);
+        drawBanner(c, cx, y + 98);
     }
 
     private void drawHand(DrawContext c, List<Cards.Card> hand, int cx, int top, long now) {
         int n = hand.size();
-        int step = n > 6 ? 24 : 30;
+        int step = n > 5 ? 32 : 44;
         float left = cx - ((n - 1) * step + Cards.W) / 2f;
         for (int i = 0; i < n; i++) Cards.draw(c, hand.get(i), left + i * step, top, now);
     }

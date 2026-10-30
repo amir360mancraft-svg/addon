@@ -120,7 +120,7 @@ public final class Cards {
         } else {
             UI.round(c, left, top, w, H, 0xFFCFCFDA);
             UI.round(c, left + 1, top + 1, w - 2, H - 2, 0xFFF8F8FC);
-            if (s > 0.6f) face(c, id, cx, top, s);
+            if (s > 0.85f) face(c, id, cx, top, s);
         }
     }
 
@@ -128,26 +128,24 @@ public final class Cards {
         int col = red(id) ? 0xFFD62F3A : 0xFF1B1B26;
         int r = rank(id), suit = id / 13;
         String label = RANK[r];
-        float lx = cx - (W / 2f - 8) * s, rx = cx + (W / 2f - 8) * s;
-        // the two corners
+        float lx = cx - 22, rx = cx + 22;
+        // the two corners (the lower one has the suit turned over)
         UI.plain(c, lx, top + 8, 1.0f, label, col);
-        UI.suit(c, suit, lx, top + 18, 0.5f, col, false);
+        UI.suit(c, suit, lx, top + 19, 1, false, col, false);
         UI.plain(c, rx, top + H - 8, 1.0f, label, col);
-        UI.suit(c, suit, rx, top + H - 18, 0.5f, col, true);
+        UI.suit(c, suit, rx, top + H - 19, 1, false, col, true);
         // the middle
         if (r == 0) {
-            UI.suit(c, suit, cx, top + H / 2f, 3.4f, col, false);
+            UI.suit(c, suit, cx, top + H / 2f, 3, true, col, false);
         } else if (r >= 10) {
-            UI.rect(c, Math.round(cx - 17), top + 12, 34, H - 24, 0xFFFFF3C4);
-            UI.outline(c, Math.round(cx - 17), top + 12, 34, H - 24, 0xFFC9A227);
+            UI.rect(c, Math.round(cx - 16), top + 12, 32, H - 24, 0xFFFFF3C4);
+            UI.outline(c, Math.round(cx - 16), top + 12, 32, H - 24, 0xFFC9A227);
             UI.plain(c, cx, top + H / 2f, 2.6f, label, col);
-            UI.suit(c, suit, cx - 10, top + 20, 0.7f, col, false);
-            UI.suit(c, suit, cx + 10, top + H - 20, 0.7f, col, true);
+            UI.suit(c, suit, cx - 9, top + 21, 1, false, col, false);
+            UI.suit(c, suit, cx + 9, top + H - 21, 1, false, col, true);
         } else {
             for (float[] p : PIPS[r + 1]) {
-                float px = cx + p[0] * 9f;
-                float py = top + 8 + p[1] * (H - 16);
-                UI.suit(c, suit, px, py, 0.72f, col, p[1] > 0.5f);
+                UI.suit(c, suit, cx + p[0] * 12f, top + 8 + p[1] * (H - 16), 1, true, col, p[1] > 0.5f);
             }
         }
     }

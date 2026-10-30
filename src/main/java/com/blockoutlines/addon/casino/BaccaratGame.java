@@ -123,14 +123,14 @@ public class BaccaratGame extends Game {
         Cards.pile(c, deckX, deckY);
 
         int px = x + w / 4, bxx = x + w * 3 / 4;
-        int zy = y + 92, zh = Cards.H + 16;
-        UI.outline(c, px - 100, zy, 200, zh, UI.alpha(pick == 0 ? UI.GOLD : UI.TEXT, pick == 0 ? 0.7f : 0.22f));
-        UI.outline(c, bxx - 100, zy, 200, zh, UI.alpha(pick == 1 ? UI.GOLD : UI.TEXT, pick == 1 ? 0.7f : 0.22f));
-        UI.center(c, "PLAYER" + shown(player, now), px, y + 80, pick == 0 ? UI.GOLD : UI.TEXT);
-        UI.center(c, "BANKER" + shown(banker, now), bxx, y + 80, pick == 1 ? UI.GOLD : UI.TEXT);
-        if (pick == 2) UI.center(c, "TIE", cx, y + 80, UI.GOLD);
-        if (lastWinner == 0 || lastWinner == 2) UI.glow(c, px - 100, zy, 200, zh, lastWinner == 2 ? UI.GOLD : UI.GOOD, winAt);
-        if (lastWinner == 1 || lastWinner == 2) UI.glow(c, bxx - 100, zy, 200, zh, lastWinner == 2 ? UI.GOLD : UI.GOOD, winAt);
+        int zy = y + 74, zh = Cards.H + 16;
+        UI.outline(c, px - 95, zy, 190, zh, UI.alpha(pick == 0 ? UI.GOLD : UI.TEXT, pick == 0 ? 0.7f : 0.22f));
+        UI.outline(c, bxx - 95, zy, 190, zh, UI.alpha(pick == 1 ? UI.GOLD : UI.TEXT, pick == 1 ? 0.7f : 0.22f));
+        UI.center(c, "PLAYER" + shown(player, now), px, y + 62, pick == 0 ? UI.GOLD : UI.TEXT);
+        UI.center(c, "BANKER" + shown(banker, now), bxx, y + 62, pick == 1 ? UI.GOLD : UI.TEXT);
+        if (pick == 2) UI.center(c, "TIE", cx, y + 100, UI.GOLD);
+        if (lastWinner == 0 || lastWinner == 2) UI.glow(c, px - 95, zy, 190, zh, lastWinner == 2 ? UI.GOLD : UI.GOOD, winAt);
+        if (lastWinner == 1 || lastWinner == 2) UI.glow(c, bxx - 95, zy, 190, zh, lastWinner == 2 ? UI.GOLD : UI.GOOD, winAt);
         // the last results: P blue, B red, T green
         for (int i = 0; i < hist.size(); i++) {
             int wv = hist.get(i);
@@ -138,7 +138,7 @@ public class BaccaratGame extends Game {
             UI.ellipse(c, hx, hy, 6, 6, wv == 0 ? 0xFF3F6BE0 : wv == 1 ? 0xFFD94A4A : 0xFF2EBF5E);
             UI.plain(c, hx, hy + 0.5f, 0.6f, wv == 0 ? "P" : wv == 1 ? "B" : "T", 0xFFFFFFFF);
         }
-        drawBetPile(c, x + 62, y + h - 52 - 54, running ? staked : bet);
+        drawBetPile(c, cx, y + 150, running ? staked : bet);
         row(c, player, px, zy + 8, now);
         row(c, banker, bxx, zy + 8, now);
 
@@ -156,7 +156,7 @@ public class BaccaratGame extends Game {
         bt.draw(c, mx, my);
         deal.draw(c, mx, my);
         drawBetBar(c, x, y + h - 46, w, mx, my);
-        drawBanner(c, cx, y + 70);
+        drawBanner(c, cx, y + 126);
     }
 
     private String shown(List<Cards.Card> hand, long now) {
