@@ -1,7 +1,6 @@
 package com.blockoutlines.addon.casino;
 
 import com.blockoutlines.addon.modules.Casino;
-import net.minecraft.client.gui.DrawContext;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -123,7 +122,7 @@ public class BlackjackGame extends Game {
     }
 
     @Override
-    public void render(DrawContext c, int x, int y, int w, int h, int mx, int my) {
+    public void render(Gfx c, int x, int y, int w, int h, int mx, int my) {
         runTasks();
         long now = now();
         int cx = x + w / 2;
@@ -160,7 +159,7 @@ public class BlackjackGame extends Game {
         drawBanner(c, cx, y + 98);
     }
 
-    private void drawHand(DrawContext c, List<Cards.Card> hand, int cx, int top, long now) {
+    private void drawHand(Gfx c, List<Cards.Card> hand, int cx, int top, long now) {
         int n = hand.size();
         int step = n > 5 ? 32 : 44;
         float left = cx - ((n - 1) * step + Cards.W) / 2f;

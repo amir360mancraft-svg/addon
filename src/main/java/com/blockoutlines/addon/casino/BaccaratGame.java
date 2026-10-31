@@ -1,7 +1,6 @@
 package com.blockoutlines.addon.casino;
 
 import com.blockoutlines.addon.modules.Casino;
-import net.minecraft.client.gui.DrawContext;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -113,7 +112,7 @@ public class BaccaratGame extends Game {
     }
 
     @Override
-    public void render(DrawContext c, int x, int y, int w, int h, int mx, int my) {
+    public void render(Gfx c, int x, int y, int w, int h, int mx, int my) {
         runTasks();
         long now = now();
         int cx = x + w / 2;
@@ -172,7 +171,7 @@ public class BaccaratGame extends Game {
         return any ? "  " + (s % 10) : "";
     }
 
-    private void row(DrawContext c, List<Cards.Card> hand, int cx, int top, long now) {
+    private void row(Gfx c, List<Cards.Card> hand, int cx, int top, long now) {
         int n = hand.size();
         int step = Cards.W + 4;
         float left = cx - ((n - 1) * step + Cards.W) / 2f;

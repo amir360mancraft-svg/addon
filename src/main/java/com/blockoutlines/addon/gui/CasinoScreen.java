@@ -6,6 +6,8 @@ import com.blockoutlines.addon.casino.CoinFlipGame;
 import com.blockoutlines.addon.casino.CrashGame;
 import com.blockoutlines.addon.casino.RouletteGame;
 import com.blockoutlines.addon.casino.Game;
+import com.blockoutlines.addon.casino.Gfx;
+import com.blockoutlines.addon.casino.GuiGfx;
 import com.blockoutlines.addon.casino.MinesGame;
 import com.blockoutlines.addon.casino.UI;
 import com.blockoutlines.addon.modules.Casino;
@@ -86,7 +88,8 @@ public class CasinoScreen extends Screen {
     }
 
     @Override
-    public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+    public void render(DrawContext raw, int mouseX, int mouseY, float delta) {
+        Gfx ctx = new GuiGfx(raw);
         ctx.fill(0, 0, width, height, 0xB0000000);
         // the window
         UI.round(ctx, left + 1, top + 3, W, H, 0x66000000);
@@ -143,7 +146,7 @@ public class CasinoScreen extends Screen {
         g.render(ctx, gx, gy, gw, gh, mouseX, mouseY);
         UI.round(ctx, fx, fy, 112, 20, betField.isFocused() ? UI.ACCENT : UI.LINE);
         UI.round(ctx, fx + 1, fy + 1, 110, 18, 0xFF0B0B13);
-        betField.render(ctx, mouseX, mouseY, delta);
+        betField.render(raw, mouseX, mouseY, delta);
         closeBtn.draw(ctx, mouseX, mouseY);
     }
 

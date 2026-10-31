@@ -120,22 +120,29 @@ public final class WorldText {
 
     /** Draws the text centered on the world point; it runs along (rx, rz), the viewer's right. size is about the letter height in blocks. */
     public static void draw(Renderer3D r, String text, double wx, double wy, double wz, double rx, double rz, double size, int argb) {
+        drawOn(r, text, wx, wy, wz, rx, 0, rz, 0, 1, 0, size, argb);
+    }
+
+    /** Text on any flat plane: it runs along the right vector R and its letters stand along the up vector U (both unit length). */
+    public static void drawOn(Renderer3D r, String text, double wx, double wy, double wz,
+                              double rx, double ry, double rz, double ux, double uy, double uz, double size, int argb) {
         if (text == null || text.isEmpty()) return;
         Raster ras = raster(text);
         double k = size / FONT_PX;
         int a = (argb >>> 24) & 255, cr = (argb >> 16) & 255, cg = (argb >> 8) & 255, cb = argb & 255;
         Color[] cols = new Color[4];
         for (int i = 1; i < 4; i++) cols[i] = new Color(cr, cg, cb, (int) Math.round(a * LEVEL_ALPHA[i]));
-        double px = wx - rx * (ras.w * k / 2), py = wy + ras.h * k / 2, pz = wz - rz * (ras.w * k / 2);
+        double hw = ras.w * k / 2, hh = ras.h * k / 2;
+        double px = wx - rx * hw + ux * hh, py = wy - ry * hw + uy * hh, pz = wz - rz * hw + uz * hh;   // top-left corner
         for (int[] q : ras.runs) {
             Color c = cols[q[4]];
             if (c.a <= 2) continue;
             double x0 = q[0] * k, x1 = (q[0] + q[2]) * k;
-            double y0 = py - q[1] * k, y1 = py - (q[1] + q[3]) * k;
-            r.quad(px + rx * x0, y0, pz + rz * x0,
-                px + rx * x1, y0, pz + rz * x1,
-                px + rx * x1, y1, pz + rz * x1,
-                px + rx * x0, y1, pz + rz * x0, c);
+            double y0 = q[1] * k, y1 = (q[1] + q[3]) * k;
+            r.quad(px + rx * x0 - ux * y0, py + ry * x0 - uy * y0, pz + rz * x0 - uz * y0,
+                px + rx * x1 - ux * y0, py + ry * x1 - uy * y0, pz + rz * x1 - uz * y0,
+                px + rx * x1 - ux * y1, py + ry * x1 - uy * y1, pz + rz * x1 - uz * y1,
+                px + rx * x0 - ux * y1, py + ry * x0 - uy * y1, pz + rz * x0 - uz * y1, c);
         }
     }
 }

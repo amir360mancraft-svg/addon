@@ -2,7 +2,6 @@ package com.blockoutlines.addon.casino;
 
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.DrawContext;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
@@ -45,12 +44,12 @@ public final class UI {
 
     // ------------------------------------------------------------------ shapes
 
-    public static void rect(DrawContext c, int x, int y, int w, int h, int col) {
+    public static void rect(Gfx c, int x, int y, int w, int h, int col) {
         c.fill(x, y, x + w, y + h, col);
     }
 
     /** A rectangle with cut corners (looks rounded). */
-    public static void round(DrawContext c, int x, int y, int w, int h, int col) {
+    public static void round(Gfx c, int x, int y, int w, int h, int col) {
         if (w < 6 || h < 6) {
             rect(c, x, y, w, h, col);
             return;
@@ -61,14 +60,14 @@ public final class UI {
     }
 
     /** Vertical gradient. */
-    public static void grad(DrawContext c, int x, int y, int w, int h, int top, int bottom) {
+    public static void grad(Gfx c, int x, int y, int w, int h, int top, int bottom) {
         int step = 2;
         for (int i = 0; i < h; i += step) {
             c.fill(x, y + i, x + w, y + Math.min(h, i + step), mix(top, bottom, h <= 1 ? 0 : i / (float) (h - 1)));
         }
     }
 
-    public static void outline(DrawContext c, int x, int y, int w, int h, int col) {
+    public static void outline(Gfx c, int x, int y, int w, int h, int col) {
         c.fill(x, y, x + w, y + 1, col);
         c.fill(x, y + h - 1, x + w, y + h, col);
         c.fill(x, y, x + 1, y + h, col);
@@ -76,14 +75,14 @@ public final class UI {
     }
 
     /** A card with a soft shadow, a thin lighter edge and a gradient. */
-    public static void panel(DrawContext c, int x, int y, int w, int h, int col) {
+    public static void panel(Gfx c, int x, int y, int w, int h, int col) {
         round(c, x + 1, y + 2, w, h, 0x55000000);
         round(c, x, y, w, h, mix(col, 0xFFFFFFFF, 0.10f));
         if (w > 4 && h > 4) grad(c, x + 1, y + 1, w - 2, h - 2, mix(col, 0xFFFFFFFF, 0.04f), mix(col, 0xFF000000, 0.12f));
     }
 
     /** The table: a wooden rail and green felt that is darker near the edges. */
-    public static void felt(DrawContext c, int x, int y, int w, int h) {
+    public static void felt(Gfx c, int x, int y, int w, int h) {
         round(c, x + 1, y + 2, w, h, 0x55000000);
         round(c, x, y, w, h, 0xFF4A2F1B);
         round(c, x + 2, y + 2, w - 4, h - 4, 0xFF68442A);
@@ -102,7 +101,7 @@ public final class UI {
     }
 
     /** Filled ellipse. */
-    public static void ellipse(DrawContext c, float cx, float cy, float rx, float ry, int col) {
+    public static void ellipse(Gfx c, float cx, float cy, float rx, float ry, int col) {
         if (rx < 0.5f) rx = 0.5f;
         int r = (int) Math.ceil(ry);
         for (int dy = -r; dy <= r; dy++) {
@@ -113,7 +112,7 @@ public final class UI {
         }
     }
 
-    public static void diamond(DrawContext c, float cx, float cy, int r, int col) {
+    public static void diamond(Gfx c, float cx, float cy, int r, int col) {
         for (int dy = -r; dy <= r; dy++) {
             int half = r - Math.abs(dy);
             c.fill(Math.round(cx - half), Math.round(cy + dy), Math.round(cx + half) + 1, Math.round(cy + dy) + 1, col);
@@ -121,7 +120,7 @@ public final class UI {
     }
 
     /** A casino chip: a coloured disc with a light ring and its value written on it. */
-    public static void chip(DrawContext c, float cx, float cy, float r, int col, String label, boolean hover) {
+    public static void chip(Gfx c, float cx, float cy, float r, int col, String label, boolean hover) {
         if (hover) r += 1;
         ellipse(c, cx + 1, cy + 2, r, r, 0x66000000);
         ellipse(c, cx, cy, r, r, 0xFFEFEFF6);
@@ -134,7 +133,7 @@ public final class UI {
     private static final int[] DEN_COL = {0xFF8A4DFF, 0xFF2A2A35, 0xFF3F6BE0, 0xFFD94A4A, 0xFFE4E4EC, 0xFF8C8CA0};
 
     /** The bet as stacks of chips: bigger chips first, centered on cx, standing on baseY. */
-    public static void chipStack(DrawContext c, float cx, float baseY, long amount) {
+    public static void chipStack(Gfx c, float cx, float baseY, long amount) {
         if (amount <= 0) return;
         int[] kinds = new int[4];
         int[] counts = new int[4];
@@ -163,7 +162,7 @@ public final class UI {
     }
 
     /** A pulsing coloured frame around a part of the table (used to show who won). */
-    public static void glow(DrawContext c, int x, int y, int w, int h, int col, long since) {
+    public static void glow(Gfx c, int x, int y, int w, int h, int col, long since) {
         long age = System.currentTimeMillis() - since;
         if (age < 0 || age > 4000) return;
         float k = (float) (0.5 + 0.5 * Math.sin(age / 140.0));
@@ -177,46 +176,46 @@ public final class UI {
 
     // ------------------------------------------------------------------ text and icons
 
-    public static void text(DrawContext c, String s, int x, int y, int col) {
-        c.drawTextWithShadow(tr(), s, x, y, col);
+    public static void text(Gfx c, String s, int x, int y, int col) {
+        c.text(s, x, y, col, true);
     }
 
-    public static void center(DrawContext c, String s, int cx, int y, int col) {
-        c.drawTextWithShadow(tr(), s, cx - tr().getWidth(s) / 2, y, col);
+    public static void center(Gfx c, String s, int cx, int y, int col) {
+        c.text(s, cx - tr().getWidth(s) / 2, y, col, true);
     }
 
-    public static void right(DrawContext c, String s, int rx, int y, int col) {
-        c.drawTextWithShadow(tr(), s, rx - tr().getWidth(s), y, col);
+    public static void right(Gfx c, String s, int rx, int y, int col) {
+        c.text(s, rx - tr().getWidth(s), y, col, true);
     }
 
     /** Text centered on (cx, cy) with its own scale in x and y. */
-    public static void scaled(DrawContext c, float cx, float cy, float sx, float sy, String s, int col) {
+    public static void scaled(Gfx c, float cx, float cy, float sx, float sy, String s, int col) {
         if (sx < 0.05f || sy < 0.05f) return;
-        c.getMatrices().pushMatrix();
-        c.getMatrices().translate(cx, cy);
-        c.getMatrices().scale(sx, sy);
-        c.drawTextWithShadow(tr(), s, -tr().getWidth(s) / 2, -4, col);
-        c.getMatrices().popMatrix();
+        c.push();
+        c.translate(cx, cy);
+        c.scale(sx, sy);
+        c.text(s, -tr().getWidth(s) / 2, -4, col, true);
+        c.pop();
     }
 
     /** Text without a shadow, centered on (cx, cy) (for dark text on light cards). */
-    public static void plain(DrawContext c, float cx, float cy, float sc, String s, int col) {
+    public static void plain(Gfx c, float cx, float cy, float sc, String s, int col) {
         if (sc < 0.05f) return;
-        c.getMatrices().pushMatrix();
-        c.getMatrices().translate(cx, cy);
-        c.getMatrices().scale(sc, sc);
-        c.drawText(tr(), s, -tr().getWidth(s) / 2, -4, col, false);
-        c.getMatrices().popMatrix();
+        c.push();
+        c.translate(cx, cy);
+        c.scale(sc, sc);
+        c.text(s, -tr().getWidth(s) / 2, -4, col, false);
+        c.pop();
     }
 
     /** A real item icon centered on (cx, cy), stretched by sx / sy (16 px at scale 1). */
-    public static void item(DrawContext c, ItemStack st, float cx, float cy, float sx, float sy) {
+    public static void item(Gfx c, ItemStack st, float cx, float cy, float sx, float sy) {
         if (sx < 0.08f || sy < 0.08f) return;
-        c.getMatrices().pushMatrix();
-        c.getMatrices().translate(cx, cy);
-        c.getMatrices().scale(sx, sy);
-        c.drawItem(st, -8, -8);
-        c.getMatrices().popMatrix();
+        c.push();
+        c.translate(cx, cy);
+        c.scale(sx, sy);
+        c.item(st, -8, -8);
+        c.pop();
     }
 
     // ------------------------------------------------------------------ card suits
@@ -247,7 +246,7 @@ public final class UI {
     }
 
     /** A card suit from a small pixel mask (clean at any whole size): 0 spade, 1 heart, 2 diamond, 3 club. One mask cell is p pixels. */
-    public static void pix(DrawContext c, int suit, float cx, float cy, int p, int col) {
+    public static void pix(Gfx c, int suit, float cx, float cy, int p, int col) {
         int x0 = Math.round(cx - GW * p / 2f), y0 = Math.round(cy - GH * p / 2f);
         boolean[][] m = MASK[suit];
         for (int y = 0; y < GH; y++) {
@@ -280,7 +279,7 @@ public final class UI {
     };
 
     /** A card suit as a small pixel picture, centered on (cx, cy). cell = pixels per dot, inv = upside down. */
-    public static void suit(DrawContext c, int suit, float cx, float cy, int cell, boolean big, int col, boolean inv) {
+    public static void suit(Gfx c, int suit, float cx, float cy, int cell, boolean big, int col, boolean inv) {
         String[] rows = (big ? BIG : SMALL)[Math.max(0, Math.min(3, suit))];
         int h = rows.length, w = rows[0].length();
         int x0 = Math.round(cx - w * cell / 2f), y0 = Math.round(cy - h * cell / 2f);
@@ -348,7 +347,7 @@ public final class UI {
             return enabled && in(mx, my, x, y, w, h);
         }
 
-        public void draw(DrawContext c, int mx, int my) {
+        public void draw(Gfx c, int mx, int my) {
             boolean hover = enabled && in(mx, my, x, y, w, h);
             int col = enabled ? color : 0xFF22222C;
             if (hover) col = mix(col, 0xFFFFFFFF, 0.16f);

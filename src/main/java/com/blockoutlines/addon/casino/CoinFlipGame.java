@@ -1,7 +1,6 @@
 package com.blockoutlines.addon.casino;
 
 import com.blockoutlines.addon.modules.Casino;
-import net.minecraft.client.gui.DrawContext;
 
 /** Pick heads or tails, the coin spins, a fair 50/50 decides. Pays 2x. */
 public class CoinFlipGame extends Game {
@@ -32,7 +31,7 @@ public class CoinFlipGame extends Game {
     }
 
     @Override
-    public void render(DrawContext c, int x, int y, int w, int h, int mx, int my) {
+    public void render(Gfx c, int x, int y, int w, int h, int mx, int my) {
         long now = now();
         int cx = x + w / 2, cy = y + 112;
         UI.felt(c, x, y, w, h - 52);

@@ -1,7 +1,6 @@
 package com.blockoutlines.addon.casino;
 
 import com.blockoutlines.addon.modules.Casino;
-import net.minecraft.client.gui.DrawContext;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -94,7 +93,7 @@ public class RouletteGame extends Game {
     }
 
     @Override
-    public void render(DrawContext c, int x, int y, int w, int h, int mx, int my) {
+    public void render(Gfx c, int x, int y, int w, int h, int mx, int my) {
         long now = now();
         int cx = x + w / 2;
         UI.felt(c, x, y, w, h - 52);

@@ -2,7 +2,6 @@ package com.blockoutlines.addon.casino;
 
 import com.blockoutlines.addon.modules.Casino;
 import com.blockoutlines.addon.util.Money;
-import net.minecraft.client.gui.DrawContext;
 
 import java.util.Arrays;
 
@@ -162,7 +161,7 @@ public class MinesGame extends Game {
     }
 
     @Override
-    public void render(DrawContext c, int x, int y, int w, int h, int mx, int my) {
+    public void render(Gfx c, int x, int y, int w, int h, int mx, int my) {
         long now = now();
         UI.panel(c, x, y, w, h - 52, UI.PANEL);
         gx = x + 24;
@@ -212,7 +211,7 @@ public class MinesGame extends Game {
         drawBanner(c, gx + 5 * (TILE + GAP) / 2, y + 100);
     }
 
-    private void drawTile(DrawContext c, int i, int tx, int ty, long now, int mx, int my) {
+    private void drawTile(Gfx c, int i, int tx, int ty, long now, int mx, int my) {
         float f = revT[i] < 0 ? 0 : Math.max(0, Math.min(1, (now - revT[i]) / 260f));
         float s = Math.abs(1 - 2 * f);
         float cx = tx + TILE / 2f, cy = ty + TILE / 2f;

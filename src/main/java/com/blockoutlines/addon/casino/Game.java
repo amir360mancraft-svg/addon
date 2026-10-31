@@ -2,7 +2,6 @@ package com.blockoutlines.addon.casino;
 
 import com.blockoutlines.addon.modules.Casino;
 import com.blockoutlines.addon.util.Money;
-import net.minecraft.client.gui.DrawContext;
 
 import java.security.SecureRandom;
 import java.util.ArrayList;
@@ -14,6 +13,8 @@ public abstract class Game {
     protected final Casino casino;
     protected final SecureRandom rng = new SecureRandom();
     protected long bet = 1000;
+    /** True when the game is drawn on the 3D machine: no bet bar (the desk has the bet buttons), only a status strip. */
+    public boolean world;
 
     private final long[] adds = {100, 1_000, 10_000, 100_000};
     public static final long[] CHIPS = {100, 1_000, 10_000, 100_000};
@@ -61,6 +62,12 @@ public abstract class Game {
         if (!busy()) bet = Math.max(0, bet / 2);
     }
 
+    public void betMax() {
+        if (busy()) return;
+        bet = casino.unlimited() ? Math.max(bet, Math.max(0, casino.balance)) : cap();
+        Sfx.tick();
+    }
+
     public void betDouble() {
         if (!busy()) bet = Math.min(cap(), bet * 2);
     }
@@ -88,7 +95,7 @@ public abstract class Game {
     public abstract boolean busy();
 
     /** The game area is x,y,w,h. The bet bar is drawn at the bottom of it by this class. */
-    public abstract void render(DrawContext c, int x, int y, int w, int h, int mx, int my);
+    public abstract void render(Gfx c, int x, int y, int w, int h, int mx, int my);
 
     public abstract boolean click(int mx, int my);
 
@@ -158,7 +165,7 @@ public abstract class Game {
         bannerAt = now();
     }
 
-    protected void drawBanner(DrawContext c, int cx, int cy) {
+    protected void drawBanner(Gfx c, int cx, int cy) {
         long t = now();
         if (burst) {
             burst = false;
@@ -208,13 +215,23 @@ public abstract class Game {
 
     /** The bar is 46 px high: the first row has the label, the amount box (drawn by the screen), the chips and your balance; the second row has the buttons. */
     /** The bet as chips on the table, with the amount under them. */
-    protected void drawBetPile(DrawContext c, int px, int py, long amount) {
+    protected void drawBetPile(Gfx c, int px, int py, long amount) {
         if (amount <= 0) return;
         UI.chipStack(c, px, py, amount);
         UI.center(c, Money.pretty(amount), px, py + 9, UI.GOLD);
     }
 
-    protected void drawBetBar(DrawContext c, int x, int y, int w, int mx, int my) {
+    protected void drawBetBar(Gfx c, int x, int y, int w, int mx, int my) {
+        if (world) {
+            UI.rect(c, x, y, w, 1, UI.LINE);
+            UI.text(c, "BET", x + 4, y + 8, UI.MUTED);
+            UI.scaled(c, x + 70, y + 12, 1.6f, 1.6f, Money.pretty(bet), UI.GOLD);
+            String chips = Money.pretty(casino.balance);
+            UI.right(c, chips, x + w - 4, y + 8, casino.balance >= 0 ? UI.GOLD : UI.BAD);
+            UI.right(c, "CHIPS", x + w - 12 - UI.tr().getWidth(chips), y + 8, UI.MUTED);
+            UI.center(c, busy() ? "round running..." : "set the bet on the desk", x + w / 2, y + 30, UI.MUTED);
+            return;
+        }
         boolean lock = busy();
         UI.rect(c, x, y, w, 1, UI.LINE);
         UI.text(c, "BET", x + 2, y + 9, UI.MUTED);
@@ -240,7 +257,7 @@ public abstract class Game {
     }
 
     protected boolean clickBetBar(int mx, int my) {
-        if (busy()) return false;
+        if (busy() || world) return false;
         for (int i = 0; i < 4; i++) {
             if (Math.hypot(mx - chipX[i], my - chipY) <= chipR) {
                 Sfx.tick();

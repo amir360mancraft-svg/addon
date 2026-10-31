@@ -1,6 +1,5 @@
 package com.blockoutlines.addon.casino;
 
-import net.minecraft.client.gui.DrawContext;
 
 import java.security.SecureRandom;
 import java.util.ArrayList;
@@ -92,7 +91,7 @@ public final class Cards {
     }
 
     /** Draws the card with its top-left corner at its place, flying in from where the deck is. */
-    public static void draw(DrawContext c, Card k, float tx, float ty, long now) {
+    public static void draw(Gfx c, Card k, float tx, float ty, long now) {
         if (now < k.dealAt) return;
         float t = UI.easeOut((now - k.dealAt) / 340f);
         float x = k.fromX + (tx - k.fromX) * t;
@@ -100,7 +99,7 @@ public final class Cards {
         drawAt(c, k.id, x, y, k.flip(now));
     }
 
-    public static void drawAt(DrawContext c, int id, float x, float y, float flip) {
+    public static void drawAt(Gfx c, int id, float x, float y, float flip) {
         float s = Math.abs(1 - 2 * flip);
         float cx = x + W / 2f;
         int w = Math.max(2, Math.round(W * s));
@@ -124,7 +123,7 @@ public final class Cards {
         }
     }
 
-    private static void face(DrawContext c, int id, float cx, int top, float s) {
+    private static void face(Gfx c, int id, float cx, int top, float s) {
         int col = red(id) ? 0xFFD62F3A : 0xFF1B1B26;
         int r = rank(id), suit = id / 13;
         String label = RANK[r];
@@ -151,7 +150,7 @@ public final class Cards {
     }
 
     /** A pile that looks like a deck. */
-    public static void pile(DrawContext c, float x, float y) {
+    public static void pile(Gfx c, float x, float y) {
         for (int i = 4; i >= 1; i--) UI.round(c, Math.round(x) + i, Math.round(y) + i, W, H, i == 4 ? 0x66000000 : 0xFF1E2C78);
         drawAt(c, 0, x, y, 0f);
     }

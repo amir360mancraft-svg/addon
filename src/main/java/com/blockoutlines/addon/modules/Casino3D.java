@@ -1,9 +1,16 @@
 package com.blockoutlines.addon.modules;
 
 import com.blockoutlines.addon.BlockOutlinesAddon;
+import com.blockoutlines.addon.casino.BaccaratGame;
+import com.blockoutlines.addon.casino.BlackjackGame;
+import com.blockoutlines.addon.casino.CoinFlipGame;
+import com.blockoutlines.addon.casino.CrashGame;
 import com.blockoutlines.addon.casino.Game;
 import com.blockoutlines.addon.casino.MinesGame;
+import com.blockoutlines.addon.casino.RouletteGame;
+import com.blockoutlines.addon.casino.Sfx;
 import com.blockoutlines.addon.casino.UI;
+import com.blockoutlines.addon.casino.WorldGfx;
 import com.blockoutlines.addon.util.Money;
 import com.blockoutlines.addon.util.WorldText;
 import meteordevelopment.meteorclient.events.meteor.MouseClickEvent;
@@ -22,63 +29,61 @@ import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.util.math.Vec3d;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 /**
- * A real arcade machine standing in the world: a cabinet with a lit marquee, a screen with the Mines field whose
- * tiles stick out like little blocks, a deck of push buttons that sink when you press them, and a lever.
- * You look at a tile / button / the lever and press the left mouse button. It is the same game (and the same fair
- * draws and chips) as in the casino window.
+ * A solid casino station standing in the world, visible from every side: a pink cabinet with a lit CASINO sign,
+ * a wooden desk and a big screen. On the DESK you pick the game and the bet; on the SCREEN the real game is played
+ * (the very same games, fair draws and chips as the casino window). Look at a button / the screen and click.
  *
- * Machine coordinates: u = to the right (as you see it), v = up from the floor, w = toward you from the front plane.
+ * Machine coordinates: u = to the right (as seen from the front), v = up from the floor, w = toward the front.
  */
 public class Casino3D extends Module {
-    private static final double SCR_U = -0.55, SCR_V = 2.18, PITCH = 0.285, TILE = 0.25, SCR_W = 0.10;
+    private static final int SW = 500, SH = 298, DW = 460, DH = 200;
 
     private final SettingGroup sg = settings.getDefaultGroup();
     private final Setting<Double> distance = sg.add(new DoubleSetting.Builder().name("distance")
-        .description("How far in front of you the machine stands.").defaultValue(3.3).range(1.5, 8).sliderRange(2, 6).build());
+        .description("How far in front of you the station stands.").defaultValue(3.2).range(1.5, 8).sliderRange(2, 6).build());
     private final Setting<Double> scale = sg.add(new DoubleSetting.Builder().name("scale")
-        .description("Size of the machine.").defaultValue(0.9).range(0.5, 2.5).sliderRange(0.6, 1.6).build());
+        .description("Size of the station.").defaultValue(1.0).range(0.5, 2.5).sliderRange(0.6, 1.6).build());
     private final Setting<Boolean> throughWalls = sg.add(new BoolSetting.Builder().name("through-walls")
-        .description("Show the machine even behind blocks.").defaultValue(false).build());
+        .description("Show the station even behind blocks.").defaultValue(false).build());
     private final Setting<Keybind> placeKey = sg.add(new KeybindSetting.Builder().name("place-key")
-        .description("Puts the machine in front of you again.").defaultValue(Keybind.none()).action(this::place).build());
+        .description("Puts the station in front of you again.").defaultValue(Keybind.none()).action(this::place).build());
 
-    private static final class El {
-        int id;
-        double u0, v0, u1, v1, w;
-        String label;
-        int color;
-        boolean enabled;
-        Runnable action;
-        double text;
-    }
-
-    private MinesGame mines;
+    private Casino casino;
+    private Game[] games;
+    private int cur = 3;
     private boolean placed;
     private double ax, ay, az, rx, rz, nx, nz, s = 1;
-    private double vu, vv, vw;                       // where you are, in machine coordinates
-    private final List<El> els = new ArrayList<>();
-    private final Map<Integer, Long> pressed = new HashMap<>();
-    private long leverAt = -10000;
-    private El hover;
-    private double hu, hv;
-    private boolean hit;
+    private double vu, vv, vw;                                   // where you are, in machine coordinates
+
+    private final WorldGfx scr = new WorldGfx(), desk = new WorldGfx();
+    private int target;                                          // 0 nothing, 1 screen, 2 desk
+    private int tx, ty;
+
+    private final UI.Btn[] pick = new UI.Btn[6];
+    private final UI.Btn clear = new UI.Btn("Clear", UI.PANEL2), half = new UI.Btn("1/2", UI.PANEL2),
+        dbl = new UI.Btn("x2", UI.PANEL2), max = new UI.Btn("Max", UI.PANEL2), reset = new UI.Btn("Reset chips", 0xFF4A2C2C);
+    private static final int[] CHIP_COL = {0xFF8C8CA0, 0xFFD94A4A, 0xFF3F6BE0, 0xFF2A2A35};
+    private static final String[] CHIP_TXT = {"100", "1K", "10K", "100K"};
+    private final int[] chipX = new int[4];
+    private int chipY = 80;
+    private static final int CHIP_R = 15;
 
     public Casino3D() {
-        super(BlockOutlinesAddon.CATEGORY, "casino-3d", "A Mines arcade machine standing in the world: look at a tile or button and click.");
+        super(BlockOutlinesAddon.CATEGORY, "casino-3d", "A casino station standing in the world: choose the game and the bet on the desk, play on the screen.");
     }
 
     @Override
     public void onActivate() {
-        Casino c = Modules.get().get(Casino.class);
-        if (c == null) return;
-        c.ensureLoaded();
-        mines = new MinesGame(c);
+        casino = Modules.get().get(Casino.class);
+        if (casino == null) return;
+        casino.ensureLoaded();
+        games = new Game[]{new BlackjackGame(casino), new BaccaratGame(casino), new CoinFlipGame(casino),
+            new MinesGame(casino), new RouletteGame(casino), new CrashGame(casino)};
+        for (int i = 0; i < games.length; i++) {
+            games[i].world = true;
+            pick[i] = new UI.Btn(games[i].name(), UI.PANEL2);
+        }
         place();
     }
 
@@ -122,99 +127,31 @@ public class Casino3D extends Module {
         return (a << 24) | (r << 16) | (g << 8) | b;
     }
 
-    /** A rectangle facing you at depth w. */
-    private void flat(Renderer3D r, double u0, double v0, double u1, double v1, double w, int argb) {
-        if (((argb >>> 24) & 255) < 3) return;
-        r.quad(X(u0, w), Y(v1), Z(u0, w), X(u1, w), Y(v1), Z(u1, w), X(u1, w), Y(v0), Z(u1, w), X(u0, w), Y(v0), Z(u0, w), col(argb));
+    private void face(Renderer3D r, int argb, double u0, double v0, double w0, double u1, double v1, double w1,
+                      double u2, double v2, double w2, double u3, double v3, double w3) {
+        r.quad(X(u0, w0), Y(v0), Z(u0, w0), X(u1, w1), Y(v1), Z(u1, w1), X(u2, w2), Y(v2), Z(u2, w2), X(u3, w3), Y(v3), Z(u3, w3), col(argb));
     }
 
-    /** A solid box: the faces you can see are drawn, lit differently so it looks round and solid. */
+    /** A solid box: every face that looks toward you is drawn, lit differently, so it is solid from all sides. */
     private void box(Renderer3D r, double u0, double v0, double w0, double u1, double v1, double w1, int argb) {
-        if (vw > w1) flat(r, u0, v0, u1, v1, w1, argb);
-        if (vv > v1) {
-            Color c = col(shade(argb, 1.22f));
-            r.quad(X(u0, w0), Y(v1), Z(u0, w0), X(u1, w0), Y(v1), Z(u1, w0), X(u1, w1), Y(v1), Z(u1, w1), X(u0, w1), Y(v1), Z(u0, w1), c);
-        }
-        if (vv < v0) {
-            Color c = col(shade(argb, 0.5f));
-            r.quad(X(u0, w0), Y(v0), Z(u0, w0), X(u1, w0), Y(v0), Z(u1, w0), X(u1, w1), Y(v0), Z(u1, w1), X(u0, w1), Y(v0), Z(u0, w1), c);
-        }
-        if (vu < u0) {
-            Color c = col(shade(argb, 0.7f));
-            r.quad(X(u0, w0), Y(v1), Z(u0, w0), X(u0, w1), Y(v1), Z(u0, w1), X(u0, w1), Y(v0), Z(u0, w1), X(u0, w0), Y(v0), Z(u0, w0), c);
-        }
-        if (vu > u1) {
-            Color c = col(shade(argb, 0.7f));
-            r.quad(X(u1, w0), Y(v1), Z(u1, w0), X(u1, w1), Y(v1), Z(u1, w1), X(u1, w1), Y(v0), Z(u1, w1), X(u1, w0), Y(v0), Z(u1, w0), c);
-        }
+        if (vw > w1) face(r, argb, u0, v1, w1, u1, v1, w1, u1, v0, w1, u0, v0, w1);
+        if (vw < w0) face(r, shade(argb, 0.72f), u0, v1, w0, u1, v1, w0, u1, v0, w0, u0, v0, w0);
+        if (vu > u1) face(r, shade(argb, 0.86f), u1, v1, w0, u1, v1, w1, u1, v0, w1, u1, v0, w0);
+        if (vu < u0) face(r, shade(argb, 0.62f), u0, v1, w0, u0, v1, w1, u0, v0, w1, u0, v0, w0);
+        if (vv > v1) face(r, shade(argb, 1.2f), u0, v1, w0, u1, v1, w0, u1, v1, w1, u0, v1, w1);
+        if (vv < v0) face(r, shade(argb, 0.45f), u0, v0, w0, u1, v0, w0, u1, v0, w1, u0, v0, w1);
     }
 
-    private void poly(Renderer3D r, double[] us, double[] vs, double w, int argb) {
-        r.quad(X(us[0], w), Y(vs[0]), Z(us[0], w), X(us[1], w), Y(vs[1]), Z(us[1], w), X(us[2], w), Y(vs[2]), Z(us[2], w), X(us[3], w), Y(vs[3]), Z(us[3], w), col(argb));
-    }
-
-    private void text(Renderer3D r, String str, double u, double v, double w, double size, double maxW, int argb) {
-        WorldText.drawFit(r, str, X(u, w), Y(v), Z(u, w), rx, rz, size * s, maxW * s, argb);
-    }
-
-    // ------------------------------------------------------------------ the controls
-
-    private void add(int id, double u0, double v0, double u1, double v1, double w, String label, int color, boolean enabled, double text, Runnable action) {
-        El e = new El();
-        e.id = id;
-        e.u0 = u0;
-        e.v0 = v0;
-        e.u1 = u1;
-        e.v1 = v1;
-        e.w = w;
-        e.label = label;
-        e.color = color;
-        e.enabled = enabled;
-        e.text = text;
-        e.action = action;
-        els.add(e);
-    }
-
-    private void mainAction() {
-        leverAt = System.currentTimeMillis();
-        if (mines.playing()) mines.cashOutNow();
-        else mines.startRound();
-    }
-
-    private void build() {
-        els.clear();
-        boolean playing = mines.playing();
-        for (int i = 0; i < MinesGame.tiles(); i++) {
-            final int idx = i;
-            double cu = SCR_U + (i % 5 - 2) * PITCH, cv = SCR_V - (i / 5 - 2) * PITCH;
-            add(i, cu - TILE / 2, cv - TILE / 2, cu + TILE / 2, cv + TILE / 2, SCR_W + 0.035, "", 0, playing && mines.tileFlip(i) < 0, 0, () -> mines.pickTileNow(idx));
-        }
-        String[] names = {"100", "1K", "10K", "100K"};
-        int[] colors = {0xFF8C8CA0, 0xFFD94A4A, 0xFF3F6BE0, 0xFF2A2A35};
-        for (int i = 0; i < 4; i++) {
-            final long v = Game.CHIPS[i];
-            double u0 = -1.2 + i * 0.33;
-            add(110 + i, u0, 0.93, u0 + 0.29, 1.2, 0.06, names[i], colors[i], !playing, 0.1, () -> mines.betAdd(v));
-        }
-        add(120, 0.2, 0.93, 0.5, 1.2, 0.06, "Clear", 0xFF4A4A62, !playing, 0.09, mines::betClear);
-        add(121, 0.53, 0.93, 0.83, 1.2, 0.06, "1/2", 0xFF4A4A62, !playing, 0.09, mines::betHalf);
-        add(122, 0.86, 0.93, 1.16, 1.2, 0.06, "x2", 0xFF4A4A62, !playing, 0.09, mines::betDouble);
-        add(100, -1.2, 0.56, -0.9, 0.84, 0.06, "-", 0xFF4A4A62, !playing && mines.minesCount() > 1, 0.16, () -> mines.minesDelta(-1));
-        add(101, -0.6, 0.56, -0.3, 0.84, 0.06, "+", 0xFF4A4A62, !playing && mines.minesCount() < 24, 0.16, () -> mines.minesDelta(1));
-        if (playing) {
-            boolean can = mines.safeCount() > 0;
-            add(130, 0.0, 0.56, 1.16, 0.88, 0.06, can ? "CASH OUT " + Money.pretty(mines.winNow()) : "pick a tile", can ? 0xFF2EBF5E : 0xFF4A4A62, can, 0.12, this::mainAction);
-        } else {
-            add(130, 0.0, 0.56, 1.16, 0.88, 0.06, "START", UI.ACCENT, true, 0.15, this::mainAction);
-        }
-        add(140, 1.46, 1.62, 1.68, 2.75, 0.12, "", 0, true, 0, this::mainAction);       // the lever
+    private double dist(double u0, double v0, double w0, double u1, double v1, double w1) {
+        double du = vu - (u0 + u1) / 2, dv = vv - (v0 + v1) / 2, dw = vw - (w0 + w1) / 2;
+        return du * du + dv * dv + dw * dw;
     }
 
     // ------------------------------------------------------------------ drawing
 
     @EventHandler
     private void onRender3D(Render3DEvent event) {
-        if (!placed || mines == null || mc.player == null || mc.world == null) return;
+        if (!placed || games == null || mc.player == null || mc.world == null) return;
         s = scale.get();
         Renderer3D r = throughWalls.get() ? event.renderer : event.depthRenderer;
         long now = System.currentTimeMillis();
@@ -224,177 +161,173 @@ public class Casino3D extends Module {
         vu = ((o.x - ax) * rx + (o.z - az) * rz) / s;
         vw = ((o.x - ax) * nx + (o.z - az) * nz) / s;
         vv = (o.y - ay) / s;
-        if (vw < 0) return;                                 // behind the machine: nothing to see or touch
 
-        build();
+        // ---- the solid body, farthest part first
+        double[][] parts = {
+            {-1.05, 0.0, -0.35, 1.05, 0.8, 0.9, 0xFF6B4423},          // pedestal under the desk
+            {-1.12, 0.8, -0.4, 1.12, 0.9, 0.95, 0xFFA9743F},          // desk slab
+            {-1.12, 0.9, -0.4, 1.12, 2.55, 0.0, 0xFFE05A9A},          // the pink wall with the screen
+            {-1.18, 2.55, -0.45, 1.18, 2.85, 0.12, 0xFF2A1A3A},       // sign on top
+            {-1.06, 1.14, 0.0, 1.06, 2.452, 0.04, 0xFF14141E},        // frame of the screen
+        };
+        Integer[] order = {0, 1, 2, 3, 4};
+        java.util.Arrays.sort(order, (a, b) -> Double.compare(
+            dist(parts[b][0], parts[b][1], parts[b][2], parts[b][3], parts[b][4], parts[b][5]),
+            dist(parts[a][0], parts[a][1], parts[a][2], parts[a][3], parts[a][4], parts[a][5])));
+        for (int i : order) {
+            double[] p = parts[i];
+            box(r, p[0], p[1], p[2], p[3], p[4], p[5], (int) (long) p[6]);
+        }
 
-        // what are you pointing at? every control is tested on its own depth, the nearest one wins
-        hit = false;
-        hover = null;
-        double denom = d.x * nx + d.z * nz;
-        double best = 1e9;
-        if (denom < -1e-4) {
-            for (El e : els) {
-                double t = ((ax + nx * e.w * s - o.x) * nx + (az + nz * e.w * s - o.z) * nz) / denom;
-                if (t <= 0 || t > 14 || t >= best) continue;
-                double px = o.x + d.x * t, py = o.y + d.y * t, pz = o.z + d.z * t;
-                double u = ((px - ax) * rx + (pz - az) * rz) / s, v = (py - ay) / s;
-                if (u >= e.u0 && u <= e.u1 && v >= e.v0 && v <= e.v1) {
-                    best = t;
-                    hover = e;
-                    hu = u;
-                    hv = v;
-                    hit = true;
-                }
+        // ---- the sign: text and chasing bulbs, front and back
+        sign(r, now, true);
+        sign(r, now, false);
+        // back of the cabinet
+        if (vw < -0.4) {
+            WorldText.drawFit(r, "CASINO", X(0, -0.402), Y(1.85), Z(0, -0.402), -rx, -rz, 0.42 * s, 1.9 * s, 0xFFFFE08A);
+            WorldText.drawFit(r, "BETTER RENDER", X(0, -0.402), Y(1.45), Z(0, -0.402), -rx, -rz, 0.16 * s, 1.9 * s, 0xFFFFFFFF);
+            WorldText.drawFit(r, "practice chips - not real money", X(0, -0.402), Y(1.22), Z(0, -0.402), -rx, -rz, 0.09 * s, 1.9 * s, 0xFFFFD0E6);
+        }
+
+        // ---- screen and desk (canvas planes)
+        scr.plane(X(-1.0, 0.046), Y(2.392), Z(-1.0, 0.046), rx, 0, rz, 0, -1, 0, 2.0 * s / SW, SW, SH);
+        desk.plane(X(-0.92, 0.05), Y(0.905), Z(-0.92, 0.05), rx, 0, rz, nx, 0, nz, 1.84 * s / DW, DW, DH);
+        boolean showScr = vw > 0.046;
+        boolean showDesk = vv > 0.9 && (vw > 0.0 || Math.abs(vu) > 1.15);
+
+        // what are you pointing at? the nearer plane wins
+        target = 0;
+        double bestT = 6.5;
+        if (showScr) {
+            double[] h = scr.pick(o.x, o.y, o.z, d.x, d.y, d.z);
+            if (h != null && h[0] >= 0 && h[0] < SW && h[1] >= 0 && h[1] < SH && h[2] < bestT) {
+                bestT = h[2];
+                target = 1;
+                tx = (int) h[0];
+                ty = (int) h[1];
+            }
+        }
+        if (showDesk) {
+            double[] h = desk.pick(o.x, o.y, o.z, d.x, d.y, d.z);
+            if (h != null && h[0] >= 0 && h[0] < DW && h[1] >= 0 && h[1] < DH && h[2] < bestT) {
+                target = 2;
+                tx = (int) h[0];
+                ty = (int) h[1];
             }
         }
 
-        long resultAge = mines.resultAge();
-        boolean celebrate = resultAge >= 0 && resultAge < 3000 && !mines.resultText().isEmpty();
-
-        // ---------------- the cabinet
-        box(r, -1.5, 0, -0.9, 1.5, 0.5, 0.35, 0xFF2A1646);                    // plinth
-        flat(r, -1.5, 0.4, 1.5, 0.46, 0.355, 0xFFFFC857);                     // gold stripe
-        flat(r, -0.55, 0.1, 0.55, 0.3, 0.356, 0xFF08080D);                    // coin tray
-        flat(r, -0.5, 0.12, 0.5, 0.18, 0.357, 0xFF1B1B26);
-        box(r, -1.35, 0.5, -0.9, 1.35, 1.3, 0.06, 0xFF3A2160);                // button deck
-        box(r, -1.35, 1.3, -0.9, 1.35, 3.05, SCR_W, 0xFF171030);              // screen housing
-        box(r, -1.62, 0, -0.9, -1.48, 3.6, 0.22, 0xFF4B2A7A);                 // side pillars
-        box(r, 1.48, 0, -0.9, 1.62, 3.6, 0.22, 0xFF4B2A7A);
-        double pulse = 0.5 + 0.5 * Math.sin(now / 260.0);
-        int strip = UI.mix(0xFF1B6E8A, 0xFF58DDE8, (float) pulse);
-        flat(r, -1.575, 0.1, -1.525, 3.5, 0.225, strip);
-        flat(r, 1.525, 0.1, 1.575, 3.5, 0.225, strip);
-        box(r, -1.5, 3.05, -0.9, 1.5, 3.6, 0.38, 0xFF241038);                 // marquee
-        box(r, -0.25, 3.6, -0.5, 0.25, 3.78, 0.0, 0xFFD94A4A);                // the red crown
-        flat(r, -1.25, 3.18, 1.25, 3.5, 0.385, 0xFF0B0716);
-        double glow = celebrate ? 0.5 + 0.5 * Math.sin(now / 70.0) : 0.5 + 0.5 * Math.sin(now / 400.0);
-        text(r, "MINES", 0, 3.34, 0.39, 0.34, 1.8, UI.mix(0xFFB88A1E, 0xFFFFE066, (float) glow));
-        // the chasing bulbs
-        int litCol = celebrate ? (mines.resultColor() | 0xFF000000) : 0xFFFFE066;
-        for (int i = 0; i < 17; i++) {
-            double bu = -1.28 + i * 0.16;
-            boolean on = celebrate ? ((i + now / 90) % 2 == 0) : ((i + now / 140) % 4 == 0);
-            int c = on ? litCol : 0xFF4B3C1C;
-            box(r, bu - 0.035, 3.09, 0.38, bu + 0.035, 3.16, 0.42, c);
-            box(r, bu - 0.035, 3.52, 0.38, bu + 0.035, 3.59, 0.42, on ? litCol : 0xFF4B3C1C);
+        if (showScr) {
+            scr.begin(r);
+            UI.rect(scr, 0, 0, SW, SH, 0xFF0B0B12);
+            games[cur].render(scr, 0, 0, SW, SH, target == 1 ? tx : -9999, target == 1 ? ty : -9999);
+            if (target == 1) cursor(scr, tx, ty);
         }
+        if (showDesk) {
+            desk.begin(r);
+            drawDesk(desk, target == 2 ? tx : -9999, target == 2 ? ty : -9999);
+            if (target == 2) cursor(desk, tx, ty);
+        }
+    }
 
-        // ---------------- the screen
-        flat(r, -1.25, 1.4, 1.25, 2.98, SCR_W + 0.004, 0xFF07070E);
-        flat(r, -1.25, 1.4, 1.25, 1.42, SCR_W + 0.006, 0xFF7C5CFF);
-        flat(r, -1.25, 2.96, 1.25, 2.98, SCR_W + 0.006, 0xFF7C5CFF);
-        flat(r, -1.25, 1.4, -1.23, 2.98, SCR_W + 0.006, 0xFF7C5CFF);
-        flat(r, 1.23, 1.4, 1.25, 2.98, SCR_W + 0.006, 0xFF7C5CFF);
+    private static void cursor(WorldGfx g, int x, int y) {
+        UI.rect(g, x - 3, y - 1, 7, 3, 0xFFFFC857);
+        UI.rect(g, x - 1, y - 3, 3, 7, 0xFFFFC857);
+    }
 
-        for (int i = 0; i < MinesGame.tiles(); i++) {
-            El e = els.get(i);
-            double cu = (e.u0 + e.u1) / 2, cv = (e.v0 + e.v1) / 2;
-            float f = mines.tileFlip(i);
-            double half = TILE / 2 * (f < 0 ? 1 : Math.max(0.03, Math.abs(1 - 2 * f)));
-            boolean hov = hover == e && e.enabled;
-            if (f < 0.5f) {
-                // a hidden tile is a little block that sticks out of the screen
-                double h = hov ? 0.05 : 0.035;
-                box(r, cu - half, cv - TILE / 2, SCR_W, cu + half, cv + TILE / 2, SCR_W + h, hov ? 0xFF5A5A82 : 0xFF3A3A55);
-                if (vw > SCR_W + h) flat(r, cu - half + 0.012, cv + TILE / 2 - 0.05, cu + half - 0.012, cv + TILE / 2 - 0.03, SCR_W + h + 0.002, 0x30FFFFFF);
-                if (hov) {
-                    double w2 = SCR_W + h + 0.004;
-                    flat(r, cu - half, cv + TILE / 2 - 0.016, cu + half, cv + TILE / 2, w2, 0xFFFFC857);
-                    flat(r, cu - half, cv - TILE / 2, cu + half, cv - TILE / 2 + 0.016, w2, 0xFFFFC857);
-                    flat(r, cu - half, cv - TILE / 2, cu - half + 0.016, cv + TILE / 2, w2, 0xFFFFC857);
-                    flat(r, cu + half - 0.016, cv - TILE / 2, cu + half, cv + TILE / 2, w2, 0xFFFFC857);
-                }
-            } else {
-                int a = mines.tileDim(i) ? 0x99 : 0xFF;
-                boolean m = mines.tileMine(i);
-                double w = SCR_W + 0.01;
-                flat(r, cu - half, cv - TILE / 2, cu + half, cv + TILE / 2, w, (a << 24) | (m ? 0x4A1A1F : 0x123D2B));
-                double k = Math.max(0.03, Math.abs(1 - 2 * f));
-                if (m) {
-                    flat(r, cu - 0.07 * k, cv - 0.07, cu + 0.07 * k, cv + 0.07, w + 0.004, (a << 24) | 0xD94A4A);
-                    flat(r, cu - 0.07 * k, cv - 0.02, cu + 0.07 * k, cv + 0.02, w + 0.008, (a << 24) | 0xFFFFFF);
-                    flat(r, cu - 0.02 * k, cv + 0.07, cu + 0.02 * k, cv + 0.11, w + 0.008, (a << 24) | 0x5A5A66);
-                } else {
-                    poly(r, new double[]{cu, cu + 0.075 * k, cu, cu - 0.075 * k}, new double[]{cv + 0.09, cv, cv - 0.09, cv}, w + 0.004, (a << 24) | 0x58DDE8);
-                    poly(r, new double[]{cu, cu + 0.03 * k, cu, cu - 0.03 * k}, new double[]{cv + 0.06, cv + 0.015, cv - 0.025, cv + 0.015}, w + 0.008, (a << 24) | 0xC9FBFF);
-                }
+    private void sign(Renderer3D r, long now, boolean front) {
+        double w = front ? 0.125 : -0.455;
+        if (front ? vw <= 0.12 : vw >= -0.45) return;
+        double dir = front ? 1 : -1;
+        WorldText.drawFit(r, "CASINO", X(0, w), Y(2.70), Z(0, w), rx * dir, rz * dir, 0.30 * s, 1.6 * s, 0xFFFFD25A);
+        int n = 14;
+        for (int i = 0; i < n; i++) {
+            double u = (-1.1 + i * (2.2 / (n - 1))) * dir;
+            boolean lit = ((now / 140 + i) % 3) == 0;
+            int c = lit ? 0xFFFFF2A8 : 0xFF8A6A1E;
+            for (double vb : new double[]{2.59, 2.81}) {
+                face(r, c, u - 0.035, vb + 0.035, w, u + 0.035, vb + 0.035, w, u + 0.035, vb - 0.035, w, u - 0.035, vb - 0.035, w);
             }
         }
+    }
 
-        // the numbers on the screen (the right part)
-        double tw = SCR_W + 0.012;
-        text(r, String.format("%.2fx", mines.multiplier()), 0.82, 2.78, tw, 0.2, 0.62, 0xFF3DDC84);
-        if (mines.playing()) text(r, String.format("next %.2fx", mines.nextMultiplier()), 0.82, 2.55, tw, 0.085, 0.6, 0xFFFFFFFF);
-        else text(r, "fair odds", 0.82, 2.55, tw, 0.085, 0.6, UI.MUTED);
-        text(r, mines.minesCount() + " mines", 0.82, 2.3, tw, 0.1, 0.6, 0xFFFFC857);
-        text(r, "bet " + Money.pretty(mines.bet()), 0.82, 2.08, tw, 0.1, 0.6, 0xFFFFFFFF);
-        text(r, "chips", 0.82, 1.84, tw, 0.075, 0.6, UI.MUTED);
-        text(r, Money.pretty(Modules.get().get(Casino.class).balance), 0.82, 1.67, tw, 0.11, 0.6, 0xFFFFC857);
+    // ------------------------------------------------------------------ the desk
 
-        // the result, as a plate across the screen
-        if (celebrate) {
-            float fade = resultAge > 2400 ? 1f - (resultAge - 2400) / 600f : 1f;
-            float pop = UI.easeBack(resultAge / 300f);
-            int a = Math.max(0, Math.min(255, (int) (255 * fade)));
-            int cc = (a << 24) | (mines.resultColor() & 0xFFFFFF);
-            double pw = 0.62 * Math.max(0.05, pop);
-            flat(r, SCR_U - pw, 2.0, SCR_U + pw, 2.42, SCR_W + 0.05, ((int) (0xE0 * fade) << 24) | 0x0A0A14);
-            flat(r, SCR_U - pw, 2.4, SCR_U + pw, 2.42, SCR_W + 0.052, cc);
-            flat(r, SCR_U - pw, 2.0, SCR_U + pw, 2.02, SCR_W + 0.052, cc);
-            text(r, mines.resultText(), SCR_U, 2.27, SCR_W + 0.06, 0.15 * pop, 1.1, cc);
-            if (!mines.resultSub().isEmpty()) text(r, mines.resultSub(), SCR_U, 2.08, SCR_W + 0.06, 0.1 * pop, 1.1, (a << 24) | 0xFFFFFF);
+    private void drawDesk(WorldGfx g, int mx, int my) {
+        Game game = games[cur];
+        boolean busy = game.busy();
+        UI.round(g, 0, 0, DW, DH, 0xFF3A2A18);
+        UI.round(g, 3, 3, DW - 6, DH - 6, 0xFF14101C);
+
+        UI.text(g, "GAME", 10, 8, UI.MUTED);
+        for (int i = 0; i < 6; i++) {
+            UI.Btn b = pick[i];
+            b.at(8 + (i % 2) * 84, 22 + (i / 2) * 42, 78, 36);
+            b.color = i == cur ? UI.ACCENT : UI.PANEL2;
+            b.enabled = !busy || i == cur;
+            b.draw(g, mx, my);
+        }
+        UI.text(g, "Rounds " + casino.rounds + "  Won " + casino.wins, 10, 152, UI.MUTED);
+        UI.text(g, "Best +" + Money.pretty(casino.best), 10, 164, UI.MUTED);
+
+        UI.text(g, "BET", 186, 8, UI.MUTED);
+        UI.round(g, 186, 20, 266, 34, 0xFF0B0B13);
+        UI.scaled(g, 186 + 133, 37, 2f, 2f, Money.pretty(game.bet()), UI.GOLD);
+        for (int i = 0; i < 4; i++) {
+            chipX[i] = 186 + 33 + i * 66;
+            boolean hover = !busy && Math.hypot(mx - chipX[i], my - chipY) <= CHIP_R;
+            if (busy) UI.ellipse(g, chipX[i], chipY, CHIP_R, CHIP_R, 0xFF2A2A33);
+            else UI.chip(g, chipX[i], chipY, CHIP_R, CHIP_COL[i], CHIP_TXT[i], hover);
+        }
+        UI.Btn[] row = {clear, half, dbl, max};
+        for (int i = 0; i < 4; i++) {
+            row[i].at(186 + i * 68, 104, 62, 24);
+            row[i].enabled = !busy;
+            row[i].draw(g, mx, my);
         }
 
-        // ---------------- the buttons (they sink when you press them)
-        for (El e : els) {
-            if (e.id < 100 || e.id == 140) continue;
-            boolean hov = hover == e;
-            Long at = pressed.get(e.id);
-            float dn = at == null ? 0f : Math.max(0f, 1f - (now - at) / 220f);
-            double h = 0.075 * (1 - 0.8 * dn);
-            int body = e.enabled ? e.color : UI.mix(e.color, 0xFF1C1C26, 0.7f);
-            if (hov && e.enabled) body = UI.mix(body, 0xFFFFFFFF, 0.2f);
-            box(r, e.u0, e.v0, e.w, e.u1, e.v1, e.w + h, body);
-            double wt = e.w + h;
-            if (vw > wt) flat(r, e.u0 + 0.015, e.v1 - 0.045, e.u1 - 0.015, e.v1 - 0.02, wt + 0.002, 0x38FFFFFF);
-            if (hov && e.enabled) {
-                flat(r, e.u0, e.v1 - 0.014, e.u1, e.v1, wt + 0.004, 0xFFFFC857);
-                flat(r, e.u0, e.v0, e.u1, e.v0 + 0.014, wt + 0.004, 0xFFFFC857);
-                flat(r, e.u0, e.v0, e.u0 + 0.014, e.v1, wt + 0.004, 0xFFFFC857);
-                flat(r, e.u1 - 0.014, e.v0, e.u1, e.v1, wt + 0.004, 0xFFFFC857);
+        UI.text(g, "CHIPS", 186, 140, UI.MUTED);
+        UI.ellipse(g, 196, 163, 7, 7, 0xFF9A7414);
+        UI.ellipse(g, 196, 163, 6, 6, UI.GOLD);
+        UI.scaled(g, 196 + 12 + Math.max(20, UI.tr().getWidth(Money.pretty(casino.balance))) * 0.9f, 163, 1.8f, 1.8f,
+            Money.pretty(casino.balance), casino.balance >= 0 ? UI.GOLD : UI.BAD);
+        reset.at(372, 152, 80, 22);
+        reset.enabled = !busy;
+        reset.draw(g, mx, my);
+        UI.center(g, "Fair draws - practice chips only", DW / 2, 184, UI.MUTED);
+    }
+
+    private void deskClick(int mx, int my) {
+        Game game = games[cur];
+        for (int i = 0; i < 6; i++) {
+            if (pick[i].hit(mx, my)) {
+                if (i != cur) {
+                    cur = i;
+                    Sfx.tick();
+                }
+                return;
             }
-            text(r, e.label, (e.u0 + e.u1) / 2, (e.v0 + e.v1) / 2 - 0.005, wt + 0.006, e.text, (e.u1 - e.u0) * 0.88, e.enabled ? 0xFFFFFFFF : 0xFF8A8A9C);
         }
-        text(r, "mines", -0.75, 0.9, 0.07, 0.075, 0.4, UI.MUTED);
-        text(r, String.valueOf(mines.minesCount()), -0.75, 0.7, 0.07, 0.2, 0.25, 0xFFFFC857);
-        text(r, "bet " + Money.pretty(mines.bet()) + "     chips " + Money.pretty(Modules.get().get(Casino.class).balance), 0, 1.265, 0.07, 0.085, 2.4, UI.MUTED);
-
-        // ---------------- the lever
-        double pull = Math.sin(Math.PI * Math.max(0, Math.min(1, (now - leverAt) / 500.0)));
-        if (now - leverAt > 500) pull = 0;
-        double ballV = 2.55 - 0.7 * pull;
-        box(r, 1.5, 1.55, 0.05, 1.64, 1.7, 0.18, 0xFF8C8CA0);                   // the base
-        box(r, 1.55, 1.7, 0.09, 1.59, ballV, 0.13, 0xFFB8B8C8);                 // the rod
-        boolean lh = hover != null && hover.id == 140;
-        box(r, 1.49, ballV, 0.05, 1.65, ballV + 0.17, 0.21, lh ? 0xFFFF7A7A : 0xFFD94A4A);   // the ball
-        if (vw > 0.21) flat(r, 1.51, ballV + 0.12, 1.63, ballV + 0.15, 0.212, 0x50FFFFFF);
-
-        // ---------------- where you are pointing
-        if (hit) {
-            double w = hover != null ? hover.w + 0.09 : 0.2;
-            flat(r, hu - 0.012, hv - 0.012, hu + 0.012, hv + 0.012, w, 0xFFFFC857);
+        if (game.busy()) return;
+        long[] add = Game.CHIPS;
+        for (int i = 0; i < 4; i++) {
+            if (Math.hypot(mx - chipX[i], my - chipY) <= CHIP_R) {
+                game.betAdd(add[i]);
+                return;
+            }
         }
+        if (clear.hit(mx, my)) game.betClear();
+        else if (half.hit(mx, my)) game.betHalf();
+        else if (dbl.hit(mx, my)) game.betDouble();
+        else if (max.hit(mx, my)) game.betMax();
+        else if (reset.hit(mx, my)) casino.resetChips();
     }
 
     @EventHandler
     private void onMouseClick(MouseClickEvent event) {
-        if (!placed || mines == null || mc.currentScreen != null || event.button() != 0) return;
-        if (hover == null) return;
-        event.cancel();                         // do not attack or break something behind the machine
-        if (event.action == KeyAction.Press && hover.enabled && hover.action != null) {
-            pressed.put(hover.id, System.currentTimeMillis());
-            hover.action.run();
-        }
+        if (!placed || games == null || mc.currentScreen != null || event.button() != 0 || target == 0) return;
+        event.cancel();                         // do not attack or break something behind the station
+        if (event.action != KeyAction.Press) return;
+        if (target == 1) games[cur].click(tx, ty);
+        else deskClick(tx, ty);
     }
 }
