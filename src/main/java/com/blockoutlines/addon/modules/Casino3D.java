@@ -132,13 +132,99 @@ public class Casino3D extends Module {
         r.quad(X(u0, w0), Y(v0), Z(u0, w0), X(u1, w1), Y(v1), Z(u1, w1), X(u2, w2), Y(v2), Z(u2, w2), X(u3, w3), Y(v3), Z(u3, w3), col(argb));
     }
 
-    /** A solid box: every face that looks toward you is drawn, lit differently, so it is solid from all sides. */
-    private void box(Renderer3D r, double u0, double v0, double w0, double u1, double v1, double w1, int argb) {
-        if (vw > w1) face(r, argb, u0, v1, w1, u1, v1, w1, u1, v0, w1, u0, v0, w1);
-        if (vw < w0) face(r, shade(argb, 0.72f), u0, v1, w0, u1, v1, w0, u1, v0, w0, u0, v0, w0);
-        if (vu > u1) face(r, shade(argb, 0.86f), u1, v1, w0, u1, v1, w1, u1, v0, w1, u1, v0, w0);
-        if (vu < u0) face(r, shade(argb, 0.62f), u0, v1, w0, u0, v1, w1, u0, v0, w1, u0, v0, w0);
-        if (vv > v1) face(r, shade(argb, 1.2f), u0, v1, w0, u1, v1, w0, u1, v1, w1, u0, v1, w1);
+    // ---- surface patterns (the quads are plain colours, so the look is built from many small ones)
+
+    private static double[] pt(double[] p0, double[] p1, double[] p3, double fa, double fb) {
+        return new double[]{p0[0] + (p1[0] - p0[0]) * fa + (p3[0] - p0[0]) * fb,
+            p0[1] + (p1[1] - p0[1]) * fa + (p3[1] - p0[1]) * fb,
+            p0[2] + (p1[2] - p0[2]) * fa + (p3[2] - p0[2]) * fb};
+    }
+
+    private static double len(double[] a, double[] b) {
+        return Math.sqrt((b[0] - a[0]) * (b[0] - a[0]) + (b[1] - a[1]) * (b[1] - a[1]) + (b[2] - a[2]) * (b[2] - a[2]));
+    }
+
+    private static double hash(int i, int j) {
+        int h = i * 73856093 ^ j * 19349663;
+        h ^= h >>> 13;
+        h *= 0x5bd1e995;
+        h ^= h >>> 15;
+        return (h & 1023) / 1023.0;
+    }
+
+    /** A sub-rectangle of a face, given in blocks from its corner p0 along a (toward p1) and b (toward p3). */
+    private void patch(Renderer3D r, double[] p0, double[] p1, double[] p3, double la, double lb,
+                       double a0, double a1, double b0, double b1, int argb) {
+        if (a1 <= a0 || b1 <= b0) return;
+        double[] q0 = pt(p0, p1, p3, a0 / la, b0 / lb), q1 = pt(p0, p1, p3, a1 / la, b0 / lb),
+            q2 = pt(p0, p1, p3, a1 / la, b1 / lb), q3 = pt(p0, p1, p3, a0 / la, b1 / lb);
+        face(r, argb, q0[0], q0[1], q0[2], q1[0], q1[1], q1[2], q2[0], q2[1], q2[2], q3[0], q3[1], q3[2]);
+    }
+
+    private void styled(Renderer3D r, int style, int argb, double[] p0, double[] p1, double[] p2, double[] p3) {
+        double la = len(p0, p1), lb = len(p0, p3);
+        if (style == 1 && la > 0.2 && lb > 0.2) {                          // wooden boards
+            patch(r, p0, p1, p3, la, lb, 0, la, 0, lb, shade(argb, 0.58f));
+            boolean alongA = la >= lb;
+            double length = alongA ? la : lb, thick = alongA ? lb : la;
+            int n = Math.max(1, (int) Math.round(thick / 0.11));
+            double st = thick / n;
+            for (int i = 0; i < n; i++) {
+                double t0 = i * st + 0.006, t1 = (i + 1) * st - 0.006, pos = 0;
+                int j = 0;
+                while (pos < length) {
+                    double seg = j == 0 ? 0.2 + (i * 29 % 7) * 0.12 : 0.55 + ((i * 7 + j * 13) % 5) * 0.17;
+                    double e = Math.min(length, pos + seg);
+                    int c = shade(argb, (float) (0.9 + 0.2 * hash(i, j)));
+                    double x0 = pos + (j == 0 ? 0 : 0.006), x1 = e - (e >= length ? 0 : 0.006);
+                    if (alongA) patch(r, p0, p1, p3, la, lb, x0, x1, t0, t1, c);
+                    else patch(r, p0, p1, p3, la, lb, t0, t1, x0, x1, c);
+                    if (x1 - x0 > 0.3) {                                       // a grain line
+                        double g = (t0 + t1) / 2 + (hash(j, i) - 0.5) * 0.03;
+                        int gc = shade(c, 0.86f);
+                        if (alongA) patch(r, p0, p1, p3, la, lb, x0 + 0.04, x1 - 0.04, g, g + 0.007, gc);
+                        else patch(r, p0, p1, p3, la, lb, g, g + 0.007, x0 + 0.04, x1 - 0.04, gc);
+                    }
+                    pos = e;
+                    j++;
+                }
+            }
+        } else if (style == 2 && la > 0.3 && lb > 0.3) {                   // padded pink panels
+            patch(r, p0, p1, p3, la, lb, 0, la, 0, lb, shade(argb, 0.66f));
+            int na = Math.max(1, (int) Math.round(la / 0.42)), nb = Math.max(1, (int) Math.round(lb / 0.42));
+            double ca = la / na, cb = lb / nb, g = 0.014;
+            for (int i = 0; i < na; i++) {
+                for (int j = 0; j < nb; j++) {
+                    double a0 = i * ca + g, a1 = (i + 1) * ca - g, b0 = j * cb + g, b1 = (j + 1) * cb - g;
+                    patch(r, p0, p1, p3, la, lb, a0, a1, b0, b1, shade(argb, (float) (0.97 + 0.06 * hash(i, j))));
+                    patch(r, p0, p1, p3, la, lb, a0, a1, b0, b0 + 0.03, shade(argb, 1.2f));
+                    patch(r, p0, p1, p3, la, lb, a0, a1, b1 - 0.03, b1, shade(argb, 0.84f));
+                }
+            }
+        } else if ((style == 3 || style == 4) && la > 0.8 && lb > 0.25) {  // flat with a thin trim line near the edge
+            face(r, argb, p0[0], p0[1], p0[2], p1[0], p1[1], p1[2], p2[0], p2[1], p2[2], p3[0], p3[1], p3[2]);
+            int tc = style == 3 ? 0xFFC9962A : 0xFF4A4A68;
+            double in = 0.03, w = 0.016;
+            patch(r, p0, p1, p3, la, lb, in, la - in, in, in + w, tc);
+            patch(r, p0, p1, p3, la, lb, in, la - in, lb - in - w, lb - in, tc);
+            patch(r, p0, p1, p3, la, lb, in, in + w, in, lb - in, tc);
+            patch(r, p0, p1, p3, la, lb, la - in - w, la - in, in, lb - in, tc);
+        } else {
+            face(r, argb, p0[0], p0[1], p0[2], p1[0], p1[1], p1[2], p2[0], p2[1], p2[2], p3[0], p3[1], p3[2]);
+        }
+    }
+
+    private static double[] P(double u, double v, double w) {
+        return new double[]{u, v, w};
+    }
+
+    /** A solid box: every face that looks toward you is drawn, lit differently and with a surface pattern, so it is solid from all sides. */
+    private void box(Renderer3D r, double u0, double v0, double w0, double u1, double v1, double w1, int argb, boolean topFace, int style) {
+        if (vw > w1) styled(r, style, argb, P(u0, v1, w1), P(u1, v1, w1), P(u1, v0, w1), P(u0, v0, w1));
+        if (vw < w0) styled(r, style, shade(argb, 0.72f), P(u1, v1, w0), P(u0, v1, w0), P(u0, v0, w0), P(u1, v0, w0));
+        if (vu > u1) styled(r, style, shade(argb, 0.86f), P(u1, v1, w1), P(u1, v1, w0), P(u1, v0, w0), P(u1, v0, w1));
+        if (vu < u0) styled(r, style, shade(argb, 0.62f), P(u0, v1, w0), P(u0, v1, w1), P(u0, v0, w1), P(u0, v0, w0));
+        if (topFace && vv > v1) styled(r, style, shade(argb, 1.2f), P(u0, v1, w1), P(u1, v1, w1), P(u1, v1, w0), P(u0, v1, w0));
         if (vv < v0) face(r, shade(argb, 0.45f), u0, v0, w0, u1, v0, w0, u1, v0, w1, u0, v0, w1);
     }
 
@@ -162,38 +248,11 @@ public class Casino3D extends Module {
         vw = ((o.x - ax) * nx + (o.z - az) * nz) / s;
         vv = (o.y - ay) / s;
 
-        // ---- the solid body, farthest part first
-        double[][] parts = {
-            {-1.05, 0.0, -0.35, 1.05, 0.8, 0.9, 0xFF6B4423},          // pedestal under the desk
-            {-1.12, 0.8, -0.4, 1.12, 0.9, 0.95, 0xFFA9743F},          // desk slab
-            {-1.12, 0.9, -0.4, 1.12, 2.55, 0.0, 0xFFE05A9A},          // the pink wall with the screen
-            {-1.18, 2.55, -0.45, 1.18, 2.85, 0.12, 0xFF2A1A3A},       // sign on top
-            {-1.06, 1.14, 0.0, 1.06, 2.452, 0.04, 0xFF14141E},        // frame of the screen
-        };
-        Integer[] order = {0, 1, 2, 3, 4};
-        java.util.Arrays.sort(order, (a, b) -> Double.compare(
-            dist(parts[b][0], parts[b][1], parts[b][2], parts[b][3], parts[b][4], parts[b][5]),
-            dist(parts[a][0], parts[a][1], parts[a][2], parts[a][3], parts[a][4], parts[a][5])));
-        for (int i : order) {
-            double[] p = parts[i];
-            box(r, p[0], p[1], p[2], p[3], p[4], p[5], (int) (long) p[6]);
-        }
-
-        // ---- the sign: text and chasing bulbs, front and back
-        sign(r, now, true);
-        sign(r, now, false);
-        // back of the cabinet
-        if (vw < -0.4) {
-            WorldText.drawFit(r, "CASINO", X(0, -0.402), Y(1.85), Z(0, -0.402), -rx, -rz, 0.42 * s, 1.9 * s, 0xFFFFE08A);
-            WorldText.drawFit(r, "BETTER RENDER", X(0, -0.402), Y(1.45), Z(0, -0.402), -rx, -rz, 0.16 * s, 1.9 * s, 0xFFFFFFFF);
-            WorldText.drawFit(r, "practice chips - not real money", X(0, -0.402), Y(1.22), Z(0, -0.402), -rx, -rz, 0.09 * s, 1.9 * s, 0xFFFFD0E6);
-        }
-
-        // ---- screen and desk (canvas planes)
+        // ---- planes of the screen and the desk
         scr.plane(X(-1.0, 0.046), Y(2.392), Z(-1.0, 0.046), rx, 0, rz, 0, -1, 0, 2.0 * s / SW, SW, SH);
         desk.plane(X(-0.92, 0.05), Y(0.905), Z(-0.92, 0.05), rx, 0, rz, nx, 0, nz, 1.84 * s / DW, DW, DH);
         boolean showScr = vw > 0.046;
-        boolean showDesk = vv > 0.9 && (vw > 0.0 || Math.abs(vu) > 1.15);
+        boolean showDesk = vv > 0.9;
 
         // what are you pointing at? the nearer plane wins
         target = 0;
@@ -207,7 +266,7 @@ public class Casino3D extends Module {
                 ty = (int) h[1];
             }
         }
-        if (showDesk) {
+        if (showDesk && (vw > 0.0 || Math.abs(vu) > 1.15)) {
             double[] h = desk.pick(o.x, o.y, o.z, d.x, d.y, d.z);
             if (h != null && h[0] >= 0 && h[0] < DW && h[1] >= 0 && h[1] < DH && h[2] < bestT) {
                 target = 2;
@@ -216,16 +275,38 @@ public class Casino3D extends Module {
             }
         }
 
-        if (showScr) {
-            scr.begin(r);
-            UI.rect(scr, 0, 0, SW, SH, 0xFF0B0B12);
-            games[cur].render(scr, 0, 0, SW, SH, target == 1 ? tx : -9999, target == 1 ? ty : -9999);
-            if (target == 1) cursor(scr, tx, ty);
-        }
-        if (showDesk) {
-            desk.begin(r);
-            drawDesk(desk, target == 2 ? tx : -9999, target == 2 ? ty : -9999);
-            if (target == 2) cursor(desk, tx, ty);
+        // ---- the solid parts, farthest first; what sits on a part (desk panel, screen, sign, text) is drawn right after it
+        double[][] parts = {
+            {-1.05, 0.0, -0.35, 1.05, 0.8, 0.9, 0xFF6B4423, 1},          // 0 pedestal under the desk
+            {-1.12, 0.8, 0.0, 1.12, 0.9, 0.95, 0xFFA9743F, 1},           // 1 desk slab
+            {-1.12, 0.8, -0.4, 1.12, 2.55, 0.0, 0xFFE05A9A, 2},          // 2 the pink wall
+            {-1.18, 2.55, -0.45, 1.18, 2.95, 0.12, 0xFF2A1A3A, 3},       // 3 sign on top
+            {-1.06, 1.14, 0.0, 1.06, 2.452, 0.04, 0xFF14141E, 4},        // 4 frame of the screen
+        };
+        Integer[] order = {0, 1, 2, 3, 4};
+        java.util.Arrays.sort(order, (a2, b2) -> Double.compare(
+            dist(parts[b2][0], parts[b2][1], parts[b2][2], parts[b2][3], parts[b2][4], parts[b2][5]),
+            dist(parts[a2][0], parts[a2][1], parts[a2][2], parts[a2][3], parts[a2][4], parts[a2][5])));
+        for (int i : order) {
+            double[] p = parts[i];
+            box(r, p[0], p[1], p[2], p[3], p[4], p[5], (int) (long) p[6], i != 0, (int) p[7]);
+            if (i == 1 && showDesk) {
+                desk.begin(r);
+                drawDesk(desk, target == 2 ? tx : -9999, target == 2 ? ty : -9999);
+                if (target == 2) cursor(desk, tx, ty);
+            } else if (i == 2 && vw < -0.4) {
+                WorldText.drawFit(r, "CASINO", X(0, -0.402), Y(1.85), Z(0, -0.402), -rx, -rz, 0.42 * s, 1.9 * s, 0xFFFFE08A);
+                WorldText.drawFit(r, "BETTER RENDER", X(0, -0.402), Y(1.45), Z(0, -0.402), -rx, -rz, 0.16 * s, 1.9 * s, 0xFFFFFFFF);
+                WorldText.drawFit(r, "practice chips - not real money", X(0, -0.402), Y(1.22), Z(0, -0.402), -rx, -rz, 0.09 * s, 1.9 * s, 0xFFFFD0E6);
+            } else if (i == 3) {
+                sign(r, now, true);
+                sign(r, now, false);
+            } else if (i == 4 && showScr) {
+                scr.begin(r);
+                UI.rect(scr, 0, 0, SW, SH, 0xFF0B0B12);
+                games[cur].render(scr, 0, 0, SW, SH, target == 1 ? tx : -9999, target == 1 ? ty : -9999);
+                if (target == 1) cursor(scr, tx, ty);
+            }
         }
     }
 
@@ -238,16 +319,16 @@ public class Casino3D extends Module {
         double w = front ? 0.125 : -0.455;
         if (front ? vw <= 0.12 : vw >= -0.45) return;
         double dir = front ? 1 : -1;
-        WorldText.drawFit(r, "CASINO", X(0, w), Y(2.70), Z(0, w), rx * dir, rz * dir, 0.30 * s, 1.6 * s, 0xFFFFD25A);
         int n = 14;
         for (int i = 0; i < n; i++) {
             double u = (-1.1 + i * (2.2 / (n - 1))) * dir;
             boolean lit = ((now / 140 + i) % 3) == 0;
             int c = lit ? 0xFFFFF2A8 : 0xFF8A6A1E;
-            for (double vb : new double[]{2.59, 2.81}) {
-                face(r, c, u - 0.035, vb + 0.035, w, u + 0.035, vb + 0.035, w, u + 0.035, vb - 0.035, w, u - 0.035, vb - 0.035, w);
+            for (double vb : new double[]{2.595, 2.905}) {
+                face(r, c, u - 0.03, vb + 0.03, w, u + 0.03, vb + 0.03, w, u + 0.03, vb - 0.03, w, u - 0.03, vb - 0.03, w);
             }
         }
+        WorldText.drawFit(r, "CASINO", X(0, w), Y(2.75), Z(0, w), rx * dir, rz * dir, 0.2 * s, 1.6 * s, 0xFFFFD25A);
     }
 
     // ------------------------------------------------------------------ the desk
