@@ -283,6 +283,7 @@ public class Casino3D extends Module {
             {-1.18, 2.55, -0.45, 1.18, 2.95, 0.12, 0xFF2A1A3A, 3},       // 3 sign on top
             {-1.06, 1.14, 0.0, 1.06, 2.452, 0.04, 0xFF14141E, 4},        // 4 frame of the screen
         };
+        floorNeon(r, now);
         Integer[] order = {0, 1, 2, 3, 4};
         java.util.Arrays.sort(order, (a2, b2) -> Double.compare(
             dist(parts[b2][0], parts[b2][1], parts[b2][2], parts[b2][3], parts[b2][4], parts[b2][5]),
@@ -290,24 +291,147 @@ public class Casino3D extends Module {
         for (int i : order) {
             double[] p = parts[i];
             box(r, p[0], p[1], p[2], p[3], p[4], p[5], (int) (long) p[6], i != 0, (int) p[7]);
-            if (i == 1 && showDesk) {
-                desk.begin(r);
-                drawDesk(desk, target == 2 ? tx : -9999, target == 2 ? ty : -9999);
-                if (target == 2) cursor(desk, tx, ty);
-            } else if (i == 2 && vw < -0.4) {
-                WorldText.drawFit(r, "CASINO", X(0, -0.402), Y(1.85), Z(0, -0.402), -rx, -rz, 0.42 * s, 1.9 * s, 0xFFFFE08A);
-                WorldText.drawFit(r, "BETTER RENDER", X(0, -0.402), Y(1.45), Z(0, -0.402), -rx, -rz, 0.16 * s, 1.9 * s, 0xFFFFFFFF);
-                WorldText.drawFit(r, "practice chips - not real money", X(0, -0.402), Y(1.22), Z(0, -0.402), -rx, -rz, 0.09 * s, 1.9 * s, 0xFFFFD0E6);
+            if (i == 1) {
+                deskThings(r, now);
+                if (showDesk) {
+                    desk.begin(r);
+                    drawDesk(desk, target == 2 ? tx : -9999, target == 2 ? ty : -9999);
+                    if (target == 2) cursor(desk, tx, ty);
+                }
+            } else if (i == 2) {
+                if (vw > 0.0) wallThings(r, now);
+                if (vw < -0.4) {
+                    WorldText.drawFit(r, "CASINO", X(0, -0.402), Y(1.85), Z(0, -0.402), -rx, -rz, 0.42 * s, 1.9 * s, 0xFFFFE08A);
+                    WorldText.drawFit(r, "BETTER RENDER", X(0, -0.402), Y(1.45), Z(0, -0.402), -rx, -rz, 0.16 * s, 1.9 * s, 0xFFFFFFFF);
+                    WorldText.drawFit(r, "practice chips - not real money", X(0, -0.402), Y(1.22), Z(0, -0.402), -rx, -rz, 0.09 * s, 1.9 * s, 0xFFFFD0E6);
+                }
             } else if (i == 3) {
                 sign(r, now, true);
                 sign(r, now, false);
+                beacons(r, now);
             } else if (i == 4 && showScr) {
+                if (vw > 0.041) frameLights(r, now);
                 scr.begin(r);
                 UI.rect(scr, 0, 0, SW, SH, 0xFF0B0B12);
                 games[cur].render(scr, 0, 0, SW, SH, target == 1 ? tx : -9999, target == 1 ? ty : -9999);
                 if (target == 1) cursor(scr, tx, ty);
             }
         }
+    }
+
+    // ------------------------------------------------------------------ small details
+
+    private static int hue(float h) {
+        h = h - (float) Math.floor(h);
+        float r = Math.max(0, Math.min(1, Math.abs(h * 6 - 3) - 1)), g = Math.max(0, Math.min(1, 2 - Math.abs(h * 6 - 2))),
+            b = Math.max(0, Math.min(1, 2 - Math.abs(h * 6 - 4)));
+        return 0xFF000000 | (Math.round(55 + 200 * r) << 16) | (Math.round(55 + 200 * g) << 8) | Math.round(55 + 200 * b);
+    }
+
+    /** A rectangle on a front-facing plane (w fixed). */
+    private void fr(Renderer3D r, double u0, double v0, double u1, double v1, double w, int argb) {
+        face(r, argb, u0, v1, w, u1, v1, w, u1, v0, w, u0, v0, w);
+    }
+
+    /** A rectangle lying flat at height v. */
+    private void fl(Renderer3D r, double u0, double w0, double u1, double w1, double v, int argb) {
+        face(r, argb, u0, v, w0, u1, v, w0, u1, v, w1, u0, v, w1);
+    }
+
+    private void floorNeon(Renderer3D r, long now) {
+        if (vv < 0.01) return;
+        double u0 = -1.45, u1 = 1.45, w0 = -0.75, w1 = 1.35, t = 0.05, v = 0.012;
+        int n = 18;
+        for (int k = 0; k < n; k++) {                         // a neon frame on the floor whose colours run around
+            int c = hue((float) (now / 2500.0 + k / (double) n));
+            double f0 = k / (double) n, f1 = (k + 1) / (double) n, per = 2 * ((u1 - u0) + (w1 - w0));
+            segment(r, u0, u1, w0, w1, t, v, f0 * per, f1 * per, c);
+        }
+    }
+
+    private void segment(Renderer3D r, double u0, double u1, double w0, double w1, double t, double v, double d0, double d1, int c) {
+        double wu = u1 - u0, ww = w1 - w0;
+        double[] edges = {wu, ww, wu, ww};
+        double start = 0;
+        for (int e = 0; e < 4; e++) {
+            double a = Math.max(d0, start) - start, b = Math.min(d1, start + edges[e]) - start;
+            if (b > a) {
+                switch (e) {
+                    case 0 -> fl(r, u0 + a, w0, u0 + b, w0 + t, v, c);
+                    case 1 -> fl(r, u1 - t, w0 + a, u1, w0 + b, v, c);
+                    case 2 -> fl(r, u1 - b, w1 - t, u1 - a, w1, v, c);
+                    default -> fl(r, u0, w1 - b, u0 + t, w1 - a, v, c);
+                }
+            }
+            start += edges[e];
+        }
+    }
+
+    private void frameLights(Renderer3D r, long now) {
+        double u0 = -1.04, u1 = 1.04, v0 = 1.16, v1 = 2.43, w = 0.043, t = 0.018;
+        double per = 2 * ((u1 - u0) + (v1 - v0));
+        int n = 40;
+        for (int k = 0; k < n; k++) {
+            double f0 = per * k / n, f1 = per * (k + 1) / n;
+            int c = hue((float) (-now / 3000.0 + k / (double) n));
+            double[] edges = {u1 - u0, v1 - v0, u1 - u0, v1 - v0};
+            double start = 0;
+            for (int e = 0; e < 4; e++) {
+                double a = Math.max(f0, start) - start, b = Math.min(f1, start + edges[e]) - start;
+                if (b > a) {
+                    switch (e) {
+                        case 0 -> fr(r, u0 + a, v1 - t, u0 + b, v1, w, c);          // top, left to right
+                        case 1 -> fr(r, u1 - t, v1 - b, u1, v1 - a, w, c);          // right, downward
+                        case 2 -> fr(r, u1 - b, v0, u1 - a, v0 + t, w, c);          // bottom, right to left
+                        default -> fr(r, u0, v0 + a, u0 + t, v0 + b, w, c);         // left, upward
+                    }
+                }
+                start += edges[e];
+            }
+        }
+    }
+
+    /** The strip of wall under the screen: two speaker grilles and a coin slot. */
+    private void wallThings(Renderer3D r, long now) {
+        double w = 0.003;
+        for (int side = -1; side <= 1; side += 2) {
+            double a = side < 0 ? -1.0 : 0.46, b = a + 0.54;
+            fr(r, a, 0.93, b, 1.11, w, 0xFF2A1A2A);
+            for (int i = 0; i < 4; i++) fr(r, a + 0.04, 0.96 + i * 0.04, b - 0.04, 0.975 + i * 0.04, w, 0xFF55405A);
+        }
+        fr(r, -0.17, 0.93, 0.17, 1.03, w, 0xFF1A1220);
+        boolean blink = (now / 500) % 2 == 0;
+        fr(r, -0.1, 0.975, 0.1, 0.99, w, blink ? 0xFFFF5A5A : 0xFF7A2A2A);
+        fr(r, -0.17, 1.03, 0.17, 1.035, w, 0xFFC9962A);
+        WorldText.drawFit(r, "INSERT COIN", X(0, w), Y(1.085), Z(0, w), rx, rz, 0.07 * s, 0.5 * s, blink ? 0xFFFFD25A : 0xFFB8902E);
+    }
+
+    /** Chip towers and a die on the desk (in the margins beside the control panel). */
+    private void deskThings(Renderer3D r, long now) {
+        if (vv < 0.9) return;
+        int[] cols = {0xFFD94A4A, 0xFFEFEFF6, 0xFF3F6BE0, 0xFF2A2A35, 0xFFD94A4A, 0xFFEFEFF6};
+        double[][] towers = {{1.02, 0.30, 6}, {1.02, 0.46, 4}, {1.02, 0.62, 5}};
+        for (double[] tw : towers) {
+            for (int k = 0; k < (int) tw[2]; k++) {
+                double v0 = 0.9 + k * 0.026;
+                box(r, tw[0] - 0.05, v0, tw[1] - 0.05, tw[0] + 0.05, v0 + 0.024, tw[1] + 0.05, cols[k % cols.length], true, 0);
+            }
+        }
+        // a die
+        box(r, -1.08, 0.9, 0.34, -0.98, 1.0, 0.44, 0xFFF4F4F0, true, 0);
+        if (vv > 1.0) {
+            double[][] dots = {{-1.058, 0.362}, {-1.058, 0.418}, {-1.03, 0.39}, {-1.002, 0.362}, {-1.002, 0.418}};
+            for (double[] d : dots) fl(r, d[0] - 0.009, d[1] - 0.009, d[0] + 0.009, d[1] + 0.009, 1.001, 0xFF1A1A22);
+        }
+    }
+
+    /** Two blinking beacons on top of the sign. */
+    private void beacons(Renderer3D r, long now) {
+        boolean a = (now / 450) % 2 == 0;
+        box(r, -1.12, 2.95, -0.3, -0.96, 3.0, -0.1, 0xFF3A3A48, true, 0);
+        box(r, 0.96, 2.95, -0.3, 1.12, 3.0, -0.1, 0xFF3A3A48, true, 0);
+        box(r, -1.08, 3.0, -0.26, -1.0, 3.1, -0.14, a ? 0xFFFF4848 : 0xFF702020, true, 0);
+        box(r, 1.0, 3.0, -0.26, 1.08, 3.1, -0.14, a ? 0xFF2A2A70 : 0xFF4A6BFF, true, 0);
     }
 
     private static void cursor(WorldGfx g, int x, int y) {
