@@ -99,14 +99,30 @@ public final class WorldText {
         return r;
     }
 
-    /**
-     * Draws the text centered on the world point (wx, wy, wz). The text runs along the horizontal direction (rx, rz)
-     * (the viewer's right) and size is the height of the letters in blocks.
-     */
+    /** The size that makes the text fit in maxWidth blocks (never bigger than size). */
+    public static double fit(String text, double size, double maxWidth) {
+        double w = width(text, size);
+        return w > maxWidth && w > 0 ? size * maxWidth / w : size;
+    }
+
+    /** The width in blocks that the text would have at this size (size is about the height of the letters). */
+    public static double width(String text, double size) {
+        if (text == null || text.isEmpty()) return 0;
+        return raster(text).w * (size / FONT_PX);
+    }
+
+    /** Like draw, but the text is made smaller if it would be wider than maxWidth. */
+    public static void drawFit(Renderer3D r, String text, double wx, double wy, double wz, double rx, double rz, double size, double maxWidth, int argb) {
+        double w = width(text, size);
+        if (w > maxWidth && w > 0) size *= maxWidth / w;
+        draw(r, text, wx, wy, wz, rx, rz, size, argb);
+    }
+
+    /** Draws the text centered on the world point; it runs along (rx, rz), the viewer's right. size is about the letter height in blocks. */
     public static void draw(Renderer3D r, String text, double wx, double wy, double wz, double rx, double rz, double size, int argb) {
         if (text == null || text.isEmpty()) return;
         Raster ras = raster(text);
-        double k = size / (FONT_PX * 0.72);
+        double k = size / FONT_PX;
         int a = (argb >>> 24) & 255, cr = (argb >> 16) & 255, cg = (argb >> 8) & 255, cb = argb & 255;
         Color[] cols = new Color[4];
         for (int i = 1; i < 4; i++) cols[i] = new Color(cr, cg, cb, (int) Math.round(a * LEVEL_ALPHA[i]));
