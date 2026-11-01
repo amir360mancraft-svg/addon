@@ -58,7 +58,7 @@ hud|q -0.95 -0.8 1.9 1.6 f|q -0.8 -0.65 1.6 1.3 b|c -0.45 -0.2 0.6 f|q -0.05 -0.
 
     private static final String[][] MAP = {
         {"amethyst-finder", "gem"}, {"seed-netherite-finder", "gem"}, {"og-chunk-finder", "chunk"}, {"light-chunk-finder", "bulb"},
-        {"sus-chunk", "eye"}, {"base-finder", "house"}, {"better-region-map", "grid"}, {"animated-sky", "cloud"},
+        {"sus-chunk", "eye"}, {"base-finder", "house"}, {"better-region-map", "grid"}, {"better-minimap", "grid"}, {"animated-sky", "cloud"},
         {"starry-sky", "sparkle"}, {"armor-trim-changer", "shield"}, {"auto-trident", "trident"}, {"better-admin-hud", "person"},
         {"better-outline", "cube"}, {"china-hat", "cone"}, {"color-grading", "palette"}, {"custom-cape", "cape"},
         {"custom-crosshair", "crosshair"}, {"target-marker", "crosshair"}, {"custom-glint", "sparkle"}, {"death-echo", "ghost"}, {"sky-lyrics", "cloud"}, {"concert-mode", "sparkle"}, {"dealer-luck", "gem"}, {"gamble-tracker", "grid"}, {"gamble-games", "gem"}, {"casino", "sparkle"}, {"casino-3d", "gem"}, {"cinematic-camera", "eye"},

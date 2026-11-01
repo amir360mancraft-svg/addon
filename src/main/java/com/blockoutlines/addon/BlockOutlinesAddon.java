@@ -29,6 +29,7 @@ import com.blockoutlines.addon.modules.AntiVanish;
 import com.blockoutlines.addon.modules.AuroraSky;
 import com.blockoutlines.addon.modules.FloatingHands;
 import com.blockoutlines.addon.modules.AnchorBomb;
+import com.blockoutlines.addon.modules.BetterMinimap;
 import com.blockoutlines.addon.modules.BetterNameProtector;
 import com.blockoutlines.addon.modules.CommandWheel;
 import com.blockoutlines.addon.modules.EmoteWheel;
@@ -154,6 +155,7 @@ public class BlockOutlinesAddon extends MeteorAddon {
         Modules.get().add(new EmoteWheel());
         Modules.get().add(new WeatherPlus());
         Modules.get().add(new SwordTrails());
+        Modules.get().add(new BetterMinimap());
         LOG.info("Better Render loaded");
     }
 
