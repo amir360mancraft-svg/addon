@@ -1,18 +1,25 @@
 package com.blockoutlines.addon.modules;
 
 import com.blockoutlines.addon.BlockOutlinesAddon;
+import com.blockoutlines.addon.gui.ExploreMapScreen;
+import com.blockoutlines.addon.util.ChunkMap;
 import com.blockoutlines.addon.util.HudHook;
+import com.blockoutlines.addon.util.MapTexture;
 import com.blockoutlines.addon.util.RoundRect;
 import meteordevelopment.meteorclient.events.render.Render2DEvent;
 import meteordevelopment.meteorclient.settings.BoolSetting;
 import meteordevelopment.meteorclient.settings.EnumSetting;
 import meteordevelopment.meteorclient.settings.IntSetting;
+import meteordevelopment.meteorclient.settings.KeybindSetting;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.settings.SettingGroup;
 import meteordevelopment.meteorclient.systems.modules.Module;
+import meteordevelopment.meteorclient.utils.misc.Keybind;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.BlockState;
+import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.texture.NativeImage;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.mob.HostileEntity;
@@ -49,6 +56,9 @@ public class BetterMinimap extends Module {
         .description("The top of the map is where you look. Off: north is always up.").defaultValue(true).build());
     private final Setting<Shape> shape = sg.add(new EnumSetting.Builder<Shape>().name("shape")
         .description("Square or round map.").defaultValue(Shape.Square).build());
+    private final Setting<Keybind> mapKey = sg.add(new KeybindSetting.Builder().name("open-map-key")
+        .description("Opens the big map with every chunk you have loaded (drag to move, scroll to zoom). The module must be on to remember chunks.")
+        .defaultValue(Keybind.none()).action(this::openMap).build());
     private final Setting<Boolean> coords = sg.add(new BoolSetting.Builder().name("coordinates")
         .description("Your X / Y / Z and the current view under the map.").defaultValue(true).build());
 
@@ -65,10 +75,15 @@ public class BetterMinimap extends Module {
         .description("Y. -1 parks it at the top.").defaultValue(-1).min(-1).sliderRange(-1, 4000).build());
 
     // the colours of the terrain around you, in world coordinates; the map is drawn (and turned) from this
-    private int[] cache;
+    private int[] cache, back, backH;
     private int cn, cx0, cz0, lastBx, lastBz, lastBy;
-    private long lastBuild;
+    private long lastBuild, lastTex;
     private boolean lastCave;
+    // a new copy of the terrain colours is built a few rows per frame (no lag spike) and then swapped in
+    private boolean building, bCave;
+    private int bn, bx0, bz0, bY, brow;
+    private final MapTexture tex = new MapTexture("minimap_view");
+    private int texPx;
     private boolean dragging;
     private double grabX, grabY;
 
@@ -80,6 +95,14 @@ public class BetterMinimap extends Module {
     public void onDeactivate() {
         dragging = false;
         cache = null;
+        back = null;
+        building = false;
+        tex.free();
+    }
+
+    private void openMap() {
+        if (mc.player == null || mc.world == null || mc.currentScreen != null) return;
+        mc.setScreen(new ExploreMapScreen());
     }
 
     private boolean caveView() {
@@ -120,62 +143,107 @@ public class BetterMinimap extends Module {
         return CHASM;
     }
 
-    private void rebuild(boolean cave) {
+    private void startBuild(boolean cave) {
         int half = (int) Math.ceil(range.get() * 1.42) + 5;
-        cn = half * 2;
-        if (cache == null || cache.length != cn * cn) cache = new int[cn * cn];
-        int bx = mc.player.getBlockX(), bz = mc.player.getBlockZ(), y0 = mc.player.getBlockY() + 1;
-        cx0 = bx - half;
-        cz0 = bz - half;
+        bn = half * 2;
+        if (back == null || back.length != bn * bn) back = new int[bn * bn];
+        if (backH == null || backH.length != bn * bn) backH = new int[bn * bn];
+        bx0 = mc.player.getBlockX() - half;
+        bz0 = mc.player.getBlockZ() - half;
+        bY = mc.player.getBlockY() + 1;
+        bCave = cave;
+        brow = 0;
+        building = true;
+        lastBx = mc.player.getBlockX();
+        lastBz = mc.player.getBlockZ();
+    }
+
+    /** Works on a few rows of the new copy; when it is complete it replaces the old one. */
+    private void stepBuild() {
         BlockPos.Mutable pos = new BlockPos.Mutable();
-        int[] heights = cave ? null : new int[cn * cn];
-        int lastCx = Integer.MIN_VALUE, lastCz = Integer.MIN_VALUE;
-        boolean loaded = false;
-        for (int iz = 0; iz < cn; iz++) {
-            for (int ix = 0; ix < cn; ix++) {
-                int wx = cx0 + ix, wz = cz0 + iz, i = iz * cn + ix;
-                int chx = wx >> 4, chz = wz >> 4;
-                if (chx != lastCx || chz != lastCz) {
-                    lastCx = chx;
-                    lastCz = chz;
-                    loaded = mc.world.getChunkManager().isChunkLoaded(chx, chz);
+        int rows = 0;
+        while (brow < bn && rows < 10) {
+            int iz = brow, wz = bz0 + iz, lastCh = Integer.MIN_VALUE;
+            boolean loaded = false;
+            for (int ix = 0; ix < bn; ix++) {
+                int wx = bx0 + ix, i = iz * bn + ix;
+                if ((wx >> 4) != lastCh) {
+                    lastCh = wx >> 4;
+                    loaded = mc.world.getChunkManager().isChunkLoaded(wx >> 4, wz >> 4);
                 }
                 if (!loaded) {
-                    cache[i] = UNLOADED;
+                    back[i] = UNLOADED;
                     continue;
                 }
-                if (cave) {
-                    cache[i] = caveColor(wx, y0, wz, pos);
+                if (bCave) {
+                    back[i] = caveColor(wx, bY, wz, pos);
                 } else {
                     int top = mc.world.getTopY(Heightmap.Type.WORLD_SURFACE, wx, wz);
-                    heights[i] = top;
+                    backH[i] = top;
                     pos.set(wx, top - 1, wz);
-                    cache[i] = 0xFF000000 | base(mc.world.getBlockState(pos), pos);
+                    back[i] = 0xFF000000 | base(mc.world.getBlockState(pos), pos);
+                }
+            }
+            brow++;
+            rows++;
+        }
+        if (brow < bn) return;
+        if (!bCave) {                                         // light and shadow from the height difference to the block to the north
+            for (int iz = 1; iz < bn; iz++) {
+                for (int ix = 0; ix < bn; ix++) {
+                    int i = iz * bn + ix;
+                    if (back[i] == UNLOADED || back[i - bn] == UNLOADED) continue;
+                    int d = Math.max(-3, Math.min(3, backH[i] - backH[i - bn]));
+                    back[i] = shade(back[i], 1.0f + d * 0.08f);
                 }
             }
         }
-        if (!cave) {                                          // light and shadow from the height difference to the block to the north
-            for (int iz = 1; iz < cn; iz++) {
-                for (int ix = 0; ix < cn; ix++) {
-                    int i = iz * cn + ix;
-                    if (cache[i] == UNLOADED || cache[i - cn] == UNLOADED) continue;
-                    int d = Math.max(-3, Math.min(3, heights[i] - heights[i - cn]));
-                    cache[i] = shade(cache[i], 1.0f + d * 0.08f);
-                }
-            }
-        }
-        lastBx = bx;
-        lastBz = bz;
-        lastBy = y0;
+        int[] old = cache;
+        cache = back;
+        back = old != null && old.length == cache.length ? old : null;
+        cn = bn;
+        cx0 = bx0;
+        cz0 = bz0;
+        lastCave = bCave;
+        lastBy = bY;
         lastBuild = System.currentTimeMillis();
-        lastCave = cave;
+        building = false;
+    }
+
+    /** Paints the map (turned the way you look) into the texture, one pixel per screen pixel. */
+    private void paintTexture(int mapSize, double rx, double rz, double fx, double fz, boolean round) {
+        int k = Math.max(1, (int) Math.round(mc.getWindow().getScaleFactor()));
+        k = Math.max(1, Math.min(k, 360 / mapSize));
+        int tp = mapSize * k;
+        int r = range.get();
+        double ppb = tp / (2.0 * r);                          // texture pixels per block
+        double px = mc.player.getX(), pz = mc.player.getZ();
+        NativeImage img = new NativeImage(tp, tp, false);
+        for (int y = 0; y < tp; y++) {
+            double sy = (tp / 2.0 - y - 0.5) / ppb;
+            for (int x = 0; x < tp; x++) {
+                double sx = (x + 0.5 - tp / 2.0) / ppb;
+                int col = 0;
+                if (!round || sx * sx + sy * sy <= r * r) {
+                    int ix = (int) Math.floor(px + rx * sx + fx * sy) - cx0;
+                    int iz = (int) Math.floor(pz + rz * sx + fz * sy) - cz0;
+                    col = ix >= 0 && iz >= 0 && ix < cn && iz < cn ? cache[iz * cn + ix] : UNLOADED;
+                }
+                img.setColorArgb(x, y, col);
+            }
+        }
+        tex.commit(img, tp, tp);
+        texPx = tp;
+        lastTex = System.currentTimeMillis();
     }
 
     // ------------------------------------------------------------------ drawing
 
     @EventHandler
     private void onRender2D(Render2DEvent event) {
-        if (mc.player == null || mc.world == null || mc.getWindow() == null || mc.options.hudHidden) return;
+        if (mc.player == null || mc.world == null || mc.getWindow() == null) return;
+        ChunkMap.tick();                                      // remembers the chunks for the big map
+        if (mc.options.hudHidden) return;
 
         int sw = mc.getWindow().getScaledWidth(), sh = mc.getWindow().getScaledHeight();
         int pad = 3, mapSize = size.get(), info = coords.get() ? 12 : 0;
@@ -191,9 +259,15 @@ public class BetterMinimap extends Module {
 
         boolean cave = caveView();
         long now = System.currentTimeMillis();
-        if (cache == null || cave != lastCave || now - lastBuild > 250
+        if (building) {
+            if (bCave != cave) startBuild(cave);
+            stepBuild();
+        } else if (cache == null || cave != lastCave || now - lastBuild > 400
             || Math.abs(mc.player.getBlockX() - lastBx) >= 3 || Math.abs(mc.player.getBlockZ() - lastBz) >= 3
-            || (cave && mc.player.getBlockY() + 1 != lastBy)) rebuild(cave);
+            || (cave && mc.player.getBlockY() + 1 != lastBy)) {
+            startBuild(cave);
+            stepBuild();
+        }
 
         int n = range.get() * 2, r = range.get();
         double yaw = Math.toRadians(mc.player.getYaw());
@@ -204,30 +278,10 @@ public class BetterMinimap extends Module {
         float sc = mapSize / (float) n;
         boolean round = shape.get() == Shape.Circle;
 
-        ctx.getMatrices().pushMatrix();
-        ctx.getMatrices().translate(mx, my);
-        ctx.getMatrices().scale(sc, sc);
-        for (int j = 0; j < n; j++) {
-            double sy = n / 2.0 - j - 0.5;
-            int runStart = -1, runColor = 0;
-            for (int i = 0; i <= n; i++) {
-                int col = 0;
-                if (i < n) {
-                    double sx = i - n / 2.0 + 0.5;
-                    if (!round || sx * sx + sy * sy <= r * r) {
-                        int ix = (int) Math.floor(px + rx * sx + fx * sy) - cx0;
-                        int iz = (int) Math.floor(pz + rz * sx + fz * sy) - cz0;
-                        col = ix >= 0 && iz >= 0 && ix < cn && iz < cn ? cache[iz * cn + ix] : UNLOADED;
-                    }
-                }
-                if (col != runColor || i == n) {
-                    if (runStart >= 0 && runColor != 0) ctx.fill(runStart, j, i, j + 1, runColor);
-                    runStart = i;
-                    runColor = col;
-                }
-            }
+        if (cache != null) {
+            if (!tex.ready() || now - lastTex >= 50) paintTexture(mapSize, rx, rz, fx, fz, round);
+            if (tex.ready()) ctx.drawTexture(RenderPipelines.GUI_TEXTURED, tex.id(), mx, my, 0f, 0f, mapSize, mapSize, texPx, texPx, texPx, texPx, 0xFFFFFFFF);
         }
-        ctx.getMatrices().popMatrix();
 
         // dots
         double cxp = mx + mapSize / 2.0, cyp = my + mapSize / 2.0;
