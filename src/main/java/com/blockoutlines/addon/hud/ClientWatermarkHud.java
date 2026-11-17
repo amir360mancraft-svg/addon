@@ -85,8 +85,9 @@ public class ClientWatermarkHud extends HudElement {
         boolean sh = shadow.get();
         double scale = Hud.get().getTextScale();
         Color accent = resolveAccent();
+        Color cutout = backgroundColor.get();
 
-        double pad = 6 * scale, iconSize = 11 * scale, iconGap = 5 * scale, segGap = 12 * scale;
+        double pad = 10 * scale, badgeR = 14 * scale, iconGap = 8 * scale, segGap = 16 * scale;
 
         List<Seg> segs = new ArrayList<>();
         if (showClientName.get()) segs.add(new Seg(ICON_BRAND, clientName.get()));
@@ -100,42 +101,44 @@ public class ClientWatermarkHud extends HudElement {
         }
 
         double textH = renderer.textHeight(sh, scale);
+        double badgeD = badgeR * 2;
         double totalW = pad * 2;
         for (int i = 0; i < segs.size(); i++) {
             Seg s = segs.get(i);
-            s.w = iconSize + iconGap + renderer.textWidth(s.text, sh, scale);
+            s.w = badgeD + iconGap + renderer.textWidth(s.text, sh, scale);
             totalW += s.w;
             if (i < segs.size() - 1) totalW += segGap;
         }
 
-        double height = Math.max(iconSize, textH) + pad * 1.6;
+        double height = Math.max(badgeD, textH) + pad * 1.4;
         setSize(totalW, height);
 
-        if (background.get()) renderer.quad(x, y, getWidth(), getHeight(), backgroundColor.get());
+        // Pill-shaped bar, same rounded look as the reference image (corner radius = half the bar's height).
+        if (background.get()) HudIcons.roundRect(renderer, x, y, getWidth(), getHeight(), getHeight() / 2, cutout);
 
-        double cx = x + pad;
-        double iy = y + (getHeight() - iconSize) / 2;
+        double cx = x + pad + badgeR;
+        double cyMid = y + getHeight() / 2;
         double ty = y + (getHeight() - textH) / 2;
 
         for (int i = 0; i < segs.size(); i++) {
             Seg s = segs.get(i);
-            drawIcon(s.icon, renderer, cx, iy, iconSize, accent);
-            renderer.text(s.text, cx + iconSize + iconGap, ty, Color.WHITE, sh, scale);
+            drawIcon(s.icon, renderer, cx, cyMid, badgeR, accent, cutout, scale);
+            renderer.text(s.text, cx + badgeR + iconGap, ty, Color.WHITE, sh, scale);
             cx += s.w;
 
             if (i < segs.size() - 1) {
-                renderer.line(cx + segGap / 2, y + pad * 0.5, cx + segGap / 2, y + getHeight() - pad * 0.5, new Color(255, 255, 255, 55));
+                renderer.line(cx + segGap / 2, y + pad * 0.7, cx + segGap / 2, y + getHeight() - pad * 0.7, new Color(255, 255, 255, 50));
                 cx += segGap;
             }
         }
     }
 
-    private void drawIcon(int icon, HudRenderer r, double x, double y, double s, Color c) {
+    private void drawIcon(int icon, HudRenderer r, double cx, double cy, double radius, Color accent, Color bg, double scale) {
         switch (icon) {
-            case ICON_BRAND -> HudIcons.brand(r, x, y, s, c);
-            case ICON_PERSON -> HudIcons.person(r, x, y, s, c);
-            case ICON_SERVER -> HudIcons.server(r, x, y, s, c, Color.WHITE);
-            case ICON_CLOCK -> HudIcons.clock(r, x, y, s, c);
+            case ICON_BRAND -> HudIcons.brand(r, cx, cy, radius, accent, bg, brandLetter(), scale);
+            case ICON_PERSON -> HudIcons.person(r, cx, cy, radius, accent, bg);
+            case ICON_SERVER -> HudIcons.server(r, cx, cy, radius, accent, bg);
+            case ICON_CLOCK -> HudIcons.clock(r, cx, cy, radius, accent, bg);
         }
     }
 
@@ -145,6 +148,14 @@ public class ClientWatermarkHud extends HudElement {
             return new Color(ac[0], ac[1], ac[2], 255);
         }
         return accentColor.get();
+    }
+
+    private String brandLetter() {
+        String n = clientName.get();
+        for (int i = 0; i < n.length(); i++) {
+            if (Character.isLetterOrDigit(n.charAt(i))) return String.valueOf(Character.toUpperCase(n.charAt(i)));
+        }
+        return "B";
     }
 
     private String username() {

@@ -2,6 +2,7 @@ package com.blockoutlines.addon.hud;
 
 import com.blockoutlines.addon.BlockOutlinesAddon;
 import com.blockoutlines.addon.gui.LunarGuiTheme;
+import meteordevelopment.meteorclient.mixin.MinecraftAccessor;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.hud.Hud;
 import meteordevelopment.meteorclient.systems.hud.HudElement;
@@ -18,7 +19,7 @@ import static meteordevelopment.meteorclient.MeteorClient.mc;
 
 /**
  * The three small FPS / ping / TPS boxes from the reference screenshot, each its own box in a row.
- * Not compiled / tested yet. FPS and TPS come straight from Meteor's own helpers (mc.getCurrentFps(),
+ * Not compiled / tested yet. FPS and TPS come straight from Meteor's own helpers (MinecraftAccessor.meteor$getFps(),
  * TickRate.INSTANCE.getTickRate()) which every build of this version of Meteor has, so those two are solid. Ping
  * is the one line written from memory (mc.getNetworkHandler().getPlayerListEntry(...).getLatency()) - wrapped in
  * a try/catch so if that exact call is wrong on this build, the box just shows 0 instead of crashing.
@@ -77,8 +78,9 @@ public class ClientStatsHud extends HudElement {
         boolean sh = shadow.get();
         double scale = Hud.get().getTextScale();
         Color accent = resolveAccent();
+        Color cutout = backgroundColor.get();
 
-        double pad = 6 * scale, iconSize = 10 * scale, iconGap = 4 * scale, boxGap = gap.get() * scale;
+        double pad = 10 * scale, badgeR = 12 * scale, iconGap = 7 * scale, boxGap = gap.get() * scale;
 
         List<Box> boxes = new ArrayList<>();
         if (showFps.get()) boxes.add(new Box(ICON_FPS, fps() + " FPS"));
@@ -91,12 +93,13 @@ public class ClientStatsHud extends HudElement {
         }
 
         double textH = renderer.textHeight(sh, scale);
-        double boxH = Math.max(iconSize, textH) + pad * 1.6;
+        double badgeD = badgeR * 2;
+        double boxH = Math.max(badgeD, textH) + pad * 1.3;
         double totalW = 0;
 
         for (int i = 0; i < boxes.size(); i++) {
             Box b = boxes.get(i);
-            b.w = pad * 2 + iconSize + iconGap + renderer.textWidth(b.text, sh, scale);
+            b.w = pad * 2 + badgeD + iconGap + renderer.textWidth(b.text, sh, scale);
             totalW += b.w;
             if (i < boxes.size() - 1) totalW += boxGap;
         }
@@ -105,24 +108,24 @@ public class ClientStatsHud extends HudElement {
 
         double cx = x;
         for (Box b : boxes) {
-            if (background.get()) renderer.quad(cx, y, b.w, boxH, backgroundColor.get());
+            if (background.get()) HudIcons.roundRect(renderer, cx, y, b.w, boxH, boxH / 3, cutout);
 
-            double iconX = cx + pad;
-            double iconY = y + (boxH - iconSize) / 2;
-            drawIcon(b.icon, renderer, iconX, iconY, iconSize, accent);
+            double iconCx = cx + pad + badgeR;
+            double iconCy = y + boxH / 2;
+            drawIcon(b.icon, renderer, iconCx, iconCy, badgeR, accent, cutout);
 
             double textY = y + (boxH - textH) / 2;
-            renderer.text(b.text, iconX + iconSize + iconGap, textY, Color.WHITE, sh, scale);
+            renderer.text(b.text, iconCx + badgeR + iconGap, textY, Color.WHITE, sh, scale);
 
             cx += b.w + boxGap;
         }
     }
 
-    private void drawIcon(int icon, HudRenderer r, double x, double y, double s, Color c) {
+    private void drawIcon(int icon, HudRenderer r, double cx, double cy, double radius, Color accent, Color bg) {
         switch (icon) {
-            case ICON_FPS -> HudIcons.chevronUp(r, x, y, s, c);
-            case ICON_PING -> HudIcons.signal(r, x, y, s, c);
-            case ICON_TPS -> HudIcons.chip(r, x, y, s, c);
+            case ICON_FPS -> HudIcons.chevronUp(r, cx, cy, radius, accent, bg);
+            case ICON_PING -> HudIcons.signal(r, cx, cy, radius, accent, bg);
+            case ICON_TPS -> HudIcons.chip(r, cx, cy, radius, accent, bg);
         }
     }
 
@@ -136,7 +139,7 @@ public class ClientStatsHud extends HudElement {
 
     private int fps() {
         try {
-            return mc.getCurrentFps();
+            return MinecraftAccessor.meteor$getFps();
         } catch (Throwable ignored) {
             return 0;
         }
