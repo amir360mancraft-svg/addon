@@ -5,6 +5,8 @@ import com.blockoutlines.addon.modules.AnimatedSky;
 import com.blockoutlines.addon.modules.AdminHud;
 import com.blockoutlines.addon.modules.ArmorTrimChanger;
 import com.blockoutlines.addon.modules.AutoTrident;
+import com.blockoutlines.addon.modules.ElytraWindBoost;
+import com.blockoutlines.addon.modules.Presets;
 import com.blockoutlines.addon.modules.BaseFinder;
 import com.blockoutlines.addon.modules.BetterSpotifyHud;
 import com.blockoutlines.addon.modules.SkyLyrics;
@@ -30,6 +32,7 @@ import com.blockoutlines.addon.modules.AuroraSky;
 import com.blockoutlines.addon.modules.FloatingHands;
 import com.blockoutlines.addon.modules.AnchorBomb;
 import com.blockoutlines.addon.modules.BetterMinimap;
+import com.blockoutlines.addon.modules.HologramMap;
 import com.blockoutlines.addon.modules.BetterNameProtector;
 import com.blockoutlines.addon.modules.CommandWheel;
 import com.blockoutlines.addon.modules.EmoteWheel;
@@ -126,6 +129,8 @@ public class BlockOutlinesAddon extends MeteorAddon {
         Modules.get().add(new HitEffect());
         Modules.get().add(new ProjectileTrails());
         Modules.get().add(new AutoTrident());
+        Modules.get().add(new ElytraWindBoost());
+        Modules.get().add(new Presets());
         Modules.get().add(new TargetMarker());
         Modules.get().add(new AdminHud());
         Modules.get().add(new DynamicIsland());
@@ -156,6 +161,7 @@ public class BlockOutlinesAddon extends MeteorAddon {
         Modules.get().add(new WeatherPlus());
         Modules.get().add(new SwordTrails());
         Modules.get().add(new BetterMinimap());
+        Modules.get().add(new HologramMap());
         LOG.info("Better Render loaded");
     }
 

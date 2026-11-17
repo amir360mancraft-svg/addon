@@ -58,15 +58,15 @@ hud|q -0.95 -0.8 1.9 1.6 f|q -0.8 -0.65 1.6 1.3 b|c -0.45 -0.2 0.6 f|q -0.05 -0.
 
     private static final String[][] MAP = {
         {"amethyst-finder", "gem"}, {"seed-netherite-finder", "gem"}, {"og-chunk-finder", "chunk"}, {"light-chunk-finder", "bulb"},
-        {"sus-chunk", "eye"}, {"base-finder", "house"}, {"better-region-map", "grid"}, {"better-minimap", "grid"}, {"animated-sky", "cloud"},
-        {"starry-sky", "sparkle"}, {"armor-trim-changer", "shield"}, {"auto-trident", "trident"}, {"better-admin-hud", "person"},
+        {"sus-chunk", "eye"}, {"base-finder", "house"}, {"better-region-map", "grid"}, {"better-minimap", "grid"}, {"hologram-map", "sparkle"}, {"animated-sky", "cloud"},
+        {"starry-sky", "sparkle"}, {"armor-trim-changer", "shield"}, {"auto-trident", "trident"}, {"elytra-wind-boost", "sparkle"}, {"better-admin-hud", "person"},
         {"better-outline", "cube"}, {"china-hat", "cone"}, {"color-grading", "palette"}, {"custom-cape", "cape"},
         {"custom-crosshair", "crosshair"}, {"target-marker", "crosshair"}, {"custom-glint", "sparkle"}, {"death-echo", "ghost"}, {"sky-lyrics", "cloud"}, {"concert-mode", "sparkle"}, {"dealer-luck", "gem"}, {"gamble-tracker", "grid"}, {"gamble-games", "gem"}, {"casino", "sparkle"}, {"casino-3d", "gem"}, {"cinematic-camera", "eye"},
         {"dynamic-island", "pill"}, {"fake-elytra", "wings"}, {"wings", "wings"}, {"hit-effect", "burst"},
         {"kill-effect", "bolt"}, {"item-counter-hud", "box"}, {"item-drop-physics", "box"}, {"jump-circle", "ring"},
         {"menu-background", "picture"}, {"no-water", "nodrop"}, {"pets", "paw"}, {"player-signs", "sign"},
         {"player-trail", "trail"}, {"projectile-trails", "trail"}, {"saturation", "apple"}, {"swing-speed", "sword"},
-        {"target-hud", "hud"}, {"fireflies", "firefly"}, {"loot-beams", "beam"}, {"afk-clicker", "sword"}, {"anti-vanish", "eye"}, {"floating-hands", "ghost"}, {"aurora-sky", "cloud"}, {"shader-hand", "palette"}, {"penguin-companion", "paw"}, {"weather-plus", "cloud"}, {"sword-trails", "sword"}, {"anchor-bomb", "sword"}, {"better-name-protector", "eye"}, {"command-wheel", "sword"}, {"emote-wheel", "ghost"},
+        {"target-hud", "hud"}, {"fireflies", "firefly"}, {"loot-beams", "beam"}, {"afk-clicker", "sword"}, {"anti-vanish", "eye"}, {"floating-hands", "ghost"}, {"aurora-sky", "cloud"}, {"shader-hand", "palette"}, {"penguin-companion", "paw"}, {"weather-plus", "cloud"}, {"sword-trails", "sword"}, {"anchor-bomb", "sword"}, {"better-name-protector", "eye"}, {"command-wheel", "sword"}, {"presets", "palette"}, {"emote-wheel", "ghost"},
     };
 
     private record Cmd(char kind, double[] v, char color) {}
