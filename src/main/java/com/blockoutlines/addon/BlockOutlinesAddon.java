@@ -67,11 +67,15 @@ import com.blockoutlines.addon.modules.Wings;
 import com.blockoutlines.addon.gui.LunarGuiTheme;
 import com.blockoutlines.addon.gui.LunarSetup;
 import com.blockoutlines.addon.gui.LunarTab;
+import com.blockoutlines.addon.hud.ClientStatsHud;
+import com.blockoutlines.addon.hud.ClientWatermarkHud;
 import com.mojang.logging.LogUtils;
 import meteordevelopment.meteorclient.addons.GithubRepo;
 import meteordevelopment.meteorclient.addons.MeteorAddon;
 import meteordevelopment.meteorclient.gui.GuiThemes;
 import meteordevelopment.meteorclient.gui.tabs.Tabs;
+import meteordevelopment.meteorclient.systems.hud.Hud;
+import meteordevelopment.meteorclient.systems.hud.HudGroup;
 import meteordevelopment.meteorclient.systems.modules.Category;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import org.slf4j.Logger;
@@ -84,6 +88,7 @@ public class BlockOutlinesAddon extends MeteorAddon {
     public static final Category COMBAT = new Category("Combat FX");
     public static final Category EFFECTS = new Category("Effects");
     public static final Category SKY = new Category("Sky & Color");
+    public static final HudGroup HUD_GROUP = new HudGroup("Better Render");
 
     @Override
     public void onRegisterCategories() {
@@ -164,6 +169,10 @@ public class BlockOutlinesAddon extends MeteorAddon {
         Modules.get().add(new SwordTrails());
         Modules.get().add(new BetterMinimap());
         Modules.get().add(new HologramMap());
+
+        Hud.get().register(ClientWatermarkHud.INFO);
+        Hud.get().register(ClientStatsHud.INFO);
+
         LOG.info("Better Render loaded");
     }
 

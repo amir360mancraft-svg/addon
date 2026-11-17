@@ -15,7 +15,7 @@ import meteordevelopment.meteorclient.systems.hud.screens.HudElementPresetsScree
 import meteordevelopment.meteorclient.utils.Utils;
 import meteordevelopment.meteorclient.utils.render.color.Color;
 import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.DrawContext;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -113,7 +113,7 @@ public class LunarAddHudScreen extends WindowScreen {
      * than crash (everything is wrapped so one bad tile just falls back to its icon).
      */
     @Override
-    protected void onRenderBefore(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+    protected void onRenderBefore(DrawContext context, float delta) {
         if (!(theme instanceof LunarGuiTheme lt)) return;
 
         var cardC = lt.cardColor.get();
@@ -130,6 +130,7 @@ public class LunarAddHudScreen extends WindowScreen {
 
         if (mc.player == null || mc.world == null) return;
         double s = mc.getWindow().getGuiScale();
+        boolean touchedProjection = false;
 
         for (Tile t : liveTiles) {
             if (t.tw <= 0 || t.th <= 0 || t.broken || t.preview == null) continue;
@@ -139,25 +140,31 @@ public class LunarAddHudScreen extends WindowScreen {
             double previewH = t.th * PREVIEW_SPLIT;
 
             try {
-                graphics.enableScissor((int) t.tx, (int) t.ty, (int) (t.tx + t.tw), (int) (t.ty + previewH));
+                context.enableScissor((int) t.tx, (int) t.ty, (int) (t.tx + t.tw), (int) (t.ty + previewH));
 
-                HudRenderer.INSTANCE.begin(graphics);
-                graphics.pose().pushMatrix();
-                graphics.pose().translate((float) ((t.tx + pad) * s), (float) ((t.ty + pad) * s));
-                graphics.pose().scale((float) (PREVIEW_ZOOM * s));
+                HudRenderer.INSTANCE.begin(context);
+                touchedProjection = true;
+                context.getMatrices().pushMatrix();
+                context.getMatrices().translate((float) ((t.tx + pad) * s), (float) ((t.ty + pad) * s));
+                context.getMatrices().scale((float) (PREVIEW_ZOOM * s), (float) (PREVIEW_ZOOM * s));
                 t.preview.render(HudRenderer.INSTANCE);
-                graphics.pose().popMatrix();
+                context.getMatrices().popMatrix();
                 HudRenderer.INSTANCE.end();
 
-                graphics.disableScissor();
+                context.disableScissor();
             } catch (Throwable err) {
                 try {
-                    graphics.disableScissor();
+                    context.disableScissor();
                 } catch (Throwable ignored) {
                 }
                 t.broken = true;
             }
         }
+
+        // HudRenderer.begin()/end() switches to the normal (scaled) projection while it draws; the rest of this
+        // screen's own widgets (drawn right after this method returns) need the pixel one back, same as
+        // LunarHubScreen does after HudEditorScreen.render() for the same reason.
+        if (touchedProjection) Utils.unscaledProjection();
     }
 
     /** Same rounded-rect fill as LunarDraw.round(), just against Renderer2D instead of a GuiRenderer. */
