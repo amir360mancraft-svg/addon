@@ -2,7 +2,6 @@ package com.blockoutlines.addon.hud;
 
 import com.blockoutlines.addon.BlockOutlinesAddon;
 import com.blockoutlines.addon.gui.LunarGuiTheme;
-import meteordevelopment.meteorclient.mixin.MinecraftAccessor;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.hud.Hud;
 import meteordevelopment.meteorclient.systems.hud.HudElement;
@@ -19,7 +18,7 @@ import static meteordevelopment.meteorclient.MeteorClient.mc;
 
 /**
  * The three small FPS / ping / TPS boxes from the reference screenshot, each its own box in a row.
- * Not compiled / tested yet. FPS and TPS come straight from Meteor's own helpers (MinecraftAccessor.meteor$getFps(),
+ * Not compiled / tested yet. FPS and TPS come straight from Meteor's own helpers (mc.getCurrentFps(),
  * TickRate.INSTANCE.getTickRate()) which every build of this version of Meteor has, so those two are solid. Ping
  * is the one line written from memory (mc.getNetworkHandler().getPlayerListEntry(...).getLatency()) - wrapped in
  * a try/catch so if that exact call is wrong on this build, the box just shows 0 instead of crashing.
@@ -137,7 +136,7 @@ public class ClientStatsHud extends HudElement {
 
     private int fps() {
         try {
-            return MinecraftAccessor.meteor$getFps();
+            return mc.getCurrentFps();
         } catch (Throwable ignored) {
             return 0;
         }

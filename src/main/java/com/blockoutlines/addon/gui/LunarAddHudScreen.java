@@ -129,7 +129,7 @@ public class LunarAddHudScreen extends WindowScreen {
         Renderer2D.COLOR.render();
 
         if (mc.player == null || mc.world == null) return;
-        double s = mc.getWindow().getGuiScale();
+        double s = mc.getWindow().getScaleFactor();
         boolean touchedProjection = false;
 
         for (Tile t : liveTiles) {
