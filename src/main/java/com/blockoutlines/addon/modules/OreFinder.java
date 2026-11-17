@@ -20,6 +20,9 @@ import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
 import net.minecraft.registry.Registries;
+import net.minecraft.registry.Registry;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.registry.RegistryKeys;
 import net.minecraft.registry.tag.BlockTags;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
@@ -28,37 +31,38 @@ import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.random.ChunkRandom;
 import net.minecraft.util.math.random.RandomSeed;
 import net.minecraft.util.math.random.Xoroshiro128PlusPlusRandom;
+import net.minecraft.world.biome.Biome;
 import net.minecraft.world.chunk.Chunk;
+import net.minecraft.world.gen.feature.PlacedFeature;
+import net.minecraft.world.gen.feature.util.PlacedFeatureIndexer;
 
-import java.util.ArrayList;
-import java.util.EnumMap;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Queue;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
- * Seed based overworld ore finder: same idea as the ancient debris finder, generalized to coal, iron, copper, gold,
- * redstone, lapis, diamond and emerald (or a custom block pair). It works out roughly where a vein should be from
- * the world seed, then looks at what the server actually shows at those spots (still solid -> probably unmined,
- * turned to air with rock around it -> mined, the real ore block -> confirmed) so it also works against anti-xray.
+ * Seed based overworld ore finder for coal and emerald (both the deepslate version), or a custom block pair. Same
+ * idea as the ancient debris finder: it works out roughly where a vein should be from the world seed, then looks at
+ * what the server actually shows at those spots (still solid -> probably unmined, turned to air with rock around it
+ * -> mined, the real ore block -> confirmed), so it also works against servers that hide ore from you (anti-xray).
  *
- * Read this before trusting it: unlike ancient debris (which generates from a handful of Nether biomes, so the
- * exact feature order can be computed), a normal overworld ore has dozens of possible biomes and several placement
- * passes. This module does NOT replicate the game's exact placement algorithm move for move - it uses the publicly
- * known, approximate Minecraft ore distribution (height range, how many tries per chunk, roughly how big a vein is)
- * for each ore, from memory. The height ranges especially may be off by some blocks for some ores, and the "large"
- * sub-variants (diamond's big vein, gold's bottom-of-the-world bonus, etc.) are only roughly covered. Use "Custom"
- * and the Minecraft Wiki's ore distribution page to fix numbers that look off for your server's version, and treat
- * highlighted spots as "worth digging toward", not a guaranteed exact block. Emerald only naturally generates in
- * Windswept Hills type biomes; this module does not check the biome, so expect extra highlighted spots elsewhere.
+ * Accuracy, read before trusting it:
+ *  - X/Z and how many tries per chunk now come from the game's own data: on world join it looks up where
+ *    "ore_coal_upper"/"ore_coal_lower"/"ore_emerald" sit in the real per-biome feature order (the same trick the
+ *    ancient debris finder uses for the Nether, just run over the overworld's biome list), so the random numbers
+ *    drawn for position should line up with the server's.
+ *  - Height range (the min/max Y each one spawns in) is typed in by hand from memory of the public ore distribution
+ *    and could be off by a few blocks.
+ *  - The shape of a vein (which nearby blocks also become ore) is an approximation, not the game's exact algorithm,
+ *    so for Coal (which can try 20-30 times per chunk) later tries in the same chunk can drift off. Emerald places
+ *    one block per try with no vein shape involved, so it should be the most reliable of the two.
+ *  - This is NOT a full offline copy of Minecraft's world generator (that is a much bigger project, closer to tools
+ *    like Amidst/Chunk Base, and not something I want to ship without being able to test it against a real server).
+ *    What this module does instead is predict + then check the real blocks the server already sent you, which is
+ *    why the "visible" and "mined" counts are a real cross-check of whether the prediction for your seed is right.
  */
 public class OreFinder extends Module {
-    public enum OreType { Coal, Iron, Copper, Gold, Redstone, Lapis, Diamond, Emerald, Custom }
+    public enum OreType { Coal, Emerald, Custom }
     private enum HeightMode { Uniform, Triangle }
 
     private static final class Rule {
@@ -74,53 +78,39 @@ public class OreFinder extends Module {
         }
     }
 
-    // Approximate 1.18+ vanilla distribution (two main tiers per ore where it has them). From memory - see class doc.
+    // Approximate height range / tries-per-chunk from memory of the public ore distribution (see class doc).
     private static final Map<OreType, Rule[]> PRESETS = new EnumMap<>(OreType.class);
     static {
         PRESETS.put(OreType.Coal, new Rule[]{
-            new Rule(30, 17, 136, 320, HeightMode.Uniform),
-            new Rule(20, 17, 0, 192, HeightMode.Triangle)
-        });
-        PRESETS.put(OreType.Iron, new Rule[]{
-            new Rule(90, 9, 80, 320, HeightMode.Triangle),
-            new Rule(10, 4, -24, 56, HeightMode.Uniform)
-        });
-        PRESETS.put(OreType.Copper, new Rule[]{
-            new Rule(16, 10, -16, 112, HeightMode.Triangle),
-            new Rule(16, 20, -16, 48, HeightMode.Uniform)
-        });
-        PRESETS.put(OreType.Gold, new Rule[]{
-            new Rule(4, 9, -64, 32, HeightMode.Triangle),
-            new Rule(50, 9, -64, -48, HeightMode.Uniform)
-        });
-        PRESETS.put(OreType.Redstone, new Rule[]{
-            new Rule(8, 8, -64, 16, HeightMode.Triangle),
-            new Rule(4, 8, -64, -32, HeightMode.Uniform)
-        });
-        PRESETS.put(OreType.Lapis, new Rule[]{
-            new Rule(2, 7, -32, 32, HeightMode.Triangle),
-            new Rule(4, 7, -64, 64, HeightMode.Uniform)
-        });
-        PRESETS.put(OreType.Diamond, new Rule[]{
-            new Rule(7, 8, -64, 16, HeightMode.Triangle),
-            new Rule(1, 12, -64, -4, HeightMode.Uniform)
+            new Rule(30, 17, 136, 320, HeightMode.Uniform),  // ore_coal_upper
+            new Rule(20, 17, 0, 192, HeightMode.Triangle)    // ore_coal_lower
         });
         PRESETS.put(OreType.Emerald, new Rule[]{
-            new Rule(3, 1, -16, 320, HeightMode.Uniform)
+            new Rule(3, 1, -16, 320, HeightMode.Uniform)     // ore_emerald (windswept hills only - see class doc)
         });
+    }
+
+    /** The real placed-feature ids in the game's own data, used to compute the real feature order on world join. */
+    private static final Map<OreType, String[]> FEATURE_IDS = new EnumMap<>(OreType.class);
+    static {
+        FEATURE_IDS.put(OreType.Coal, new String[]{"ore_coal_upper", "ore_coal_lower"});
+        FEATURE_IDS.put(OreType.Emerald, new String[]{"ore_emerald"});
     }
 
     private static final Map<OreType, Block[]> BLOCKS = new EnumMap<>(OreType.class);
     static {
         BLOCKS.put(OreType.Coal, new Block[]{Blocks.COAL_ORE, Blocks.DEEPSLATE_COAL_ORE});
-        BLOCKS.put(OreType.Iron, new Block[]{Blocks.IRON_ORE, Blocks.DEEPSLATE_IRON_ORE});
-        BLOCKS.put(OreType.Copper, new Block[]{Blocks.COPPER_ORE, Blocks.DEEPSLATE_COPPER_ORE});
-        BLOCKS.put(OreType.Gold, new Block[]{Blocks.GOLD_ORE, Blocks.DEEPSLATE_GOLD_ORE});
-        BLOCKS.put(OreType.Redstone, new Block[]{Blocks.REDSTONE_ORE, Blocks.DEEPSLATE_REDSTONE_ORE});
-        BLOCKS.put(OreType.Lapis, new Block[]{Blocks.LAPIS_ORE, Blocks.DEEPSLATE_LAPIS_ORE});
-        BLOCKS.put(OreType.Diamond, new Block[]{Blocks.DIAMOND_ORE, Blocks.DEEPSLATE_DIAMOND_ORE});
         BLOCKS.put(OreType.Emerald, new Block[]{Blocks.EMERALD_ORE, Blocks.DEEPSLATE_EMERALD_ORE});
     }
+
+    /** Biomes that are not part of a normal overworld (used to build the biome list for the feature-order lookup). */
+    private static final Set<String> NON_OVERWORLD_BIOMES = Set.of(
+        "nether_wastes", "soul_sand_valley", "crimson_forest", "warped_forest", "basalt_deltas",
+        "the_void", "the_end", "end_highlands", "end_midlands", "end_barrens", "small_end_islands"
+    );
+
+    /** Vanilla data: underground ores are decoration step 6 (ancient debris, in the Nether finder, is step 7). */
+    private static final int STEP = 6;
 
     private final SettingGroup sgGeneral = settings.getDefaultGroup();
     private final SettingGroup sgCustom = settings.createGroup("Custom ore");
@@ -133,7 +123,11 @@ public class OreFinder extends Module {
 
     private final Setting<OreType> ore = sgGeneral.add(new EnumSetting.Builder<OreType>()
         .name("ore").description("Which ore to look for. Custom lets you type your own block ids and range.")
-        .defaultValue(OreType.Diamond).build());
+        .defaultValue(OreType.Emerald).build());
+
+    private final Setting<Boolean> deepslateOnly = sgGeneral.add(new BoolSetting.Builder()
+        .name("deepslate-only").description("Only count/show the deepslate version of the ore (ignore the normal-stone version).")
+        .defaultValue(true).build());
 
     private final Setting<Boolean> showMined = sgGeneral.add(new BoolSetting.Builder()
         .name("show-mined").description("Also mark spots where the ore generated but the block is gone now (empty hole in solid rock).")
@@ -144,11 +138,11 @@ public class OreFinder extends Module {
         .defaultValue(8).range(0, 26).sliderRange(0, 20).visible(showMined::get).build());
 
     private final Setting<Boolean> showVisible = sgGeneral.add(new BoolSetting.Builder()
-        .name("show-visible").description("Also mark real ore blocks the server already shows you (also confirms the seed/numbers are right).")
+        .name("show-visible").description("Also mark real ore blocks the server already shows you (also confirms the prediction is on track).")
         .defaultValue(true).build());
 
     private final Setting<Boolean> debug = sgGeneral.add(new BoolSetting.Builder()
-        .name("debug").description("Print what the module is doing in chat every few seconds.")
+        .name("debug").description("Print what the module is doing in chat every few seconds, including whether the real feature order was found.")
         .defaultValue(false).build());
 
     // -------- custom ore
@@ -167,7 +161,7 @@ public class OreFinder extends Module {
         .name("max-y").defaultValue(16).range(-64, 320).sliderRange(-64, 320).visible(() -> ore.get() == OreType.Custom).build());
 
     private final Setting<HeightMode> customMode = sgCustom.add(new EnumSetting.Builder<HeightMode>()
-        .name("height-mode").description("Uniform = evenly spread. Triangle = more common in the middle of the range (most ores are like this).")
+        .name("height-mode").description("Uniform = evenly spread. Triangle = more common in the middle of the range.")
         .defaultValue(HeightMode.Triangle).visible(() -> ore.get() == OreType.Custom).build());
 
     private final Setting<Integer> customCount = sgCustom.add(new IntSetting.Builder()
@@ -209,6 +203,9 @@ public class OreFinder extends Module {
 
     private Long seed;
     private OreType builtFor;
+    private boolean featuresReady;
+    private final Map<OreType, int[]> featureIndex = new EnumMap<>(OreType.class);
+    private String indexSource = "";
     private final BlockPos.Mutable mutable = new BlockPos.Mutable();
     private final BlockPos.Mutable mutable2 = new BlockPos.Mutable();
     private final Color side = new Color();
@@ -217,12 +214,13 @@ public class OreFinder extends Module {
     private int debugTimer;
 
     public OreFinder() {
-        super(BlockOutlinesAddon.HUNTING, "ore-finder", "Seed based ore finder for the overworld (coal, iron, copper, gold, redstone, lapis, diamond, emerald, or a custom block). Approximate - read the module description.");
+        super(BlockOutlinesAddon.HUNTING, "ore-finder", "Seed based ore finder for coal and emerald (deepslate), or a custom block. Approximate - read the module description.");
     }
 
     @Override
     public void onActivate() {
         clearAll();
+        featuresReady = false;
         if (mc.world == null) return;
         for (Chunk chunk : Utils.chunks()) enqueue(chunk.getPos().toLong());
     }
@@ -235,6 +233,7 @@ public class OreFinder extends Module {
     @EventHandler
     private void onGameLeft(GameLeftEvent event) {
         clearAll();
+        featuresReady = false;
     }
 
     private void clearAll() {
@@ -279,13 +278,17 @@ public class OreFinder extends Module {
     }
 
     private Block[] blocks() {
-        if (ore.get() != OreType.Custom) return BLOCKS.get(ore.get());
-        Block n = parseBlock(customNormal.get());
-        Block d = parseBlock(customDeepslate.get());
-        if (n == null && d == null) return new Block[]{Blocks.STONE}; // never matches, avoids a crash on a bad id
-        if (n == null) return new Block[]{d};
-        if (d == null) return new Block[]{n};
-        return new Block[]{n, d};
+        Block[] b;
+        if (ore.get() != OreType.Custom) {
+            b = BLOCKS.get(ore.get());
+        } else {
+            Block n = parseBlock(customNormal.get());
+            Block d = parseBlock(customDeepslate.get());
+            if (n == null && d == null) return new Block[]{Blocks.STONE}; // never matches, avoids a crash on a bad id
+            b = (n == null) ? new Block[]{d} : (d == null) ? new Block[]{n} : new Block[]{n, d};
+        }
+        if (!deepslateOnly.get() || b.length < 2) return b;
+        return new Block[]{b[1]}; // [normal, deepslate] -> just deepslate
     }
 
     private static Block parseBlock(String id) {
@@ -298,10 +301,55 @@ public class OreFinder extends Module {
         }
     }
 
+    // ------------------------------------------------------------------ real feature order (for accurate X/Z)
+
+    /** Finds where each ore's placed feature(s) sit in the game's real, per-biome underground-ores order. */
+    private void initFeatures() {
+        featuresReady = true;
+        featureIndex.clear();
+        indexSource = "not found yet - using an approximate order";
+        try {
+            var registries = mc.world.getRegistryManager();
+            Registry<Biome> biomes = registries.getOrThrow(RegistryKeys.BIOME);
+            Registry<PlacedFeature> placed = registries.getOrThrow(RegistryKeys.PLACED_FEATURE);
+
+            List<Biome> list = new ArrayList<>();
+            for (var entry : biomes.getEntrySet()) {
+                if (!NON_OVERWORLD_BIOMES.contains(entry.getKey().getValue().getPath())) list.add(entry.getValue());
+            }
+            if (list.isEmpty()) return;
+
+            List<PlacedFeatureIndexer.IndexedFeatures> indexed =
+                PlacedFeatureIndexer.collectIndexedFeatures(list, b -> b.getGenerationSettings().getFeatures(), false);
+            if (indexed.size() <= STEP) return;
+            List<PlacedFeature> step = indexed.get(STEP).features();
+
+            for (var e : FEATURE_IDS.entrySet()) {
+                String[] ids = e.getValue();
+                int[] idx = new int[ids.length];
+                boolean ok = true;
+                for (int i = 0; i < ids.length; i++) {
+                    PlacedFeature f = placed.get(RegistryKey.of(RegistryKeys.PLACED_FEATURE, Identifier.of("minecraft", ids[i])));
+                    int pos = f == null ? -1 : step.indexOf(f);
+                    if (pos < 0) { ok = false; break; }
+                    idx[i] = pos;
+                }
+                if (ok) featureIndex.put(e.getKey(), idx);
+            }
+            indexSource = featureIndex.size() + "/" + FEATURE_IDS.size() + " ores matched to the real order";
+        } catch (Throwable t) {
+            BlockOutlinesAddon.LOG.warn("OreFinder: could not read the feature order, falling back to an approximate one: {}", t.toString());
+        }
+    }
+
     // ------------------------------------------------------------------ prediction
 
-    private static float triangle(net.minecraft.util.math.random.Random random) {
-        return (random.nextFloat() - random.nextFloat() + 1.0F) / 2.0F; // 0..1, peaked at 0.5
+    /** Close to the game's own TrapezoidHeightProvider with no plateau: two nextInt calls, peaked at the middle. */
+    private static int triangleY(net.minecraft.util.math.random.Random random, int min, int max) {
+        int span = Math.max(0, max - min);
+        int k = span / 2;
+        int l = span - k;
+        return min + random.nextInt(l + 1) + random.nextInt(k + 1);
     }
 
     private static int spread(net.minecraft.util.math.random.Random random, int spread) {
@@ -313,20 +361,19 @@ public class OreFinder extends Module {
         Rule[] rl = rules();
         ChunkRandom random = new ChunkRandom(new Xoroshiro128PlusPlusRandom(RandomSeed.getSeed()));
         long population = random.setPopulationSeed(seed, cx * 16, cz * 16);
+        int[] real = featureIndex.get(ore.get());
 
         for (int ri = 0; ri < rl.length; ri++) {
             Rule r = rl[ri];
-            // one attempt per decorator seed, like the game does, but the feature index is a guess here (see the
-            // class doc): we derive a distinct-but-made-up index per ore+rule so different ores/rules at least do
-            // not all draw from the exact same random stream.
-            int fakeIndex = 4000 + ore.get().ordinal() * 8 + ri;
-            for (int attempt = 0; attempt < Math.max(1, r.count / Math.max(1, r.size)) + 1; attempt++) {
-                random.setDecoratorSeed(population, fakeIndex * 97 + attempt, 7);
+            // one decorator seed per feature (like the game), then every try for that feature shares the same
+            // continuing random stream - a made-up index is used only when the real one could not be found.
+            int decoratorIndex = (real != null && ri < real.length) ? real[ri] : 4000 + ore.get().ordinal() * 8 + ri;
+            random.setDecoratorSeed(population, decoratorIndex, STEP);
+
+            for (int attempt = 0; attempt < r.count; attempt++) {
                 int x = random.nextInt(16) + cx * 16;
                 int z = random.nextInt(16) + cz * 16;
-                int y = r.mode == HeightMode.Triangle
-                    ? r.minY + Math.round(triangle(random) * (r.maxY - r.minY))
-                    : r.minY + random.nextInt(Math.max(1, r.maxY - r.minY + 1));
+                int y = r.mode == HeightMode.Triangle ? triangleY(random, r.minY, r.maxY) : r.minY + random.nextInt(Math.max(1, r.maxY - r.minY + 1));
                 scatter(random, x, y, z, r.size, out);
             }
         }
@@ -334,7 +381,14 @@ public class OreFinder extends Module {
     }
 
     private void scatter(net.minecraft.util.math.random.Random random, int x, int y, int z, int size, List<Spot> out) {
-        int count = random.nextInt(Math.max(1, size)) + 1;
+        if (size <= 1) {
+            long packed = BlockPos.asLong(x, y, z);
+            boolean dup = false;
+            for (Spot s : out) if (s.pos == packed) { dup = true; break; }
+            if (!dup) out.add(new Spot(packed));
+            return;
+        }
+        int count = random.nextInt(size) + 1;
         for (int j = 0; j < count; j++) {
             int sp = Math.min(j, 7);
             int dx = spread(random, sp);
@@ -363,8 +417,10 @@ public class OreFinder extends Module {
         return s.isOpaque() && s.getFluidState().isEmpty();
     }
 
-    private static boolean hostRock(BlockState s) {
-        return s.isIn(BlockTags.STONE_ORE_REPLACEABLES) || s.isIn(BlockTags.DEEPSLATE_ORE_REPLACEABLES);
+    private boolean hostRock(BlockState s) {
+        boolean deepslate = s.isIn(BlockTags.DEEPSLATE_ORE_REPLACEABLES);
+        if (deepslateOnly.get()) return deepslate;
+        return deepslate || s.isIn(BlockTags.STONE_ORE_REPLACEABLES);
     }
 
     private int classify(Spot spot) {
@@ -443,6 +499,7 @@ public class OreFinder extends Module {
     private void onTick(TickEvent.Post event) {
         if (mc.world == null || mc.player == null) return;
         if (PlayerUtils.getDimension() != Dimension.Overworld) return;
+        if (!featuresReady) initFeatures();
 
         Long parsed = parseSeed(seedText.get());
         boolean oreChanged = builtFor != ore.get();
@@ -487,7 +544,7 @@ public class OreFinder extends Module {
                 else if (s.state == VISIBLE) v++;
                 else if (s.state == PENDING) p++;
             }
-            info("seed %d | ore %s | spots %d: unmined %d, mined %d, visible %d, pending %d", seed, ore.get(), total, u, m, v, p);
+            info("seed %d | ore %s | feature order: %s | spots %d: unmined %d, mined %d, visible %d, pending %d", seed, ore.get(), indexSource, total, u, m, v, p);
         }
     }
 
@@ -517,7 +574,7 @@ public class OreFinder extends Module {
 
         Integer[] order = new Integer[near.size()];
         for (int i = 0; i < order.length; i++) order[i] = i;
-        java.util.Arrays.sort(order, (a, b) -> Double.compare(dist.get(a), dist.get(b)));
+        Arrays.sort(order, (a, b) -> Double.compare(dist.get(a), dist.get(b)));
 
         int shown = 0;
         for (int idx : order) {
